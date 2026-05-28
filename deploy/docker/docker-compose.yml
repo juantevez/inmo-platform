@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # --- DATABASE: PostgreSQL ---
+  postgres:
+    image: postgres:16-alpine
+    container_name: inmo-postgres
+    environment:
+      POSTGRES_USER: inmo_user
+      POSTGRES_PASSWORD: inmo_password
+      POSTGRES_DB: inmo_catalog_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - inmo-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inmo_user -d inmo_catalog_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- MESSAGE BROKER: NATS con JetStream ---
+  nats:
+    image: nats:2.10-alpine
+    container_name: inmo-nats
+    # El flag -js activa JetStream, -sd define dónde guarda los mensajes persistidos
+    command: ["-js", "-sd", "/data"]
+    ports:
+      - "4222:4222" # Puerto de conexión de clientes Go
+      - "8222:8222" # Puerto de monitoreo HTTP (opcional, para chusmear el estado)
+    volumes:
+      - nats_data:/data
+    networks:
+      - inmo-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "4222"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
+  nats_data:
+    driver: local
+
+networks:
+  inmo-network:
+    driver: bridge
+    
