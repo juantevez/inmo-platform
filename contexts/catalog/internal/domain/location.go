@@ -1,6 +1,6 @@
 package domain
 
-import "inmo-platform/shared/pkg/apperr"
+import "inmo.platform/shared/pkg/apperr"
 
 // Location representa las coordenadas geográficas de la propiedad.
 type Location struct {

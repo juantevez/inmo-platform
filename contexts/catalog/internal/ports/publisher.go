@@ -2,7 +2,7 @@ package ports
 
 import (
 	"context"
-	"inmo-platform/shared/pkg/ddd"
+	"inmo.platform/shared/pkg/ddd"
 )
 
 // EventPublisher define el contrato para despachar eventos de dominio fuera del contexto.

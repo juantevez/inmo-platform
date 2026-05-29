@@ -1,4 +1,4 @@
-module inmo-platform/contexts/crm
+module inmo.platform/contexts/crm
 
 go 1.25.0
 

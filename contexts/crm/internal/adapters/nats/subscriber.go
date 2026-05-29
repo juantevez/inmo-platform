@@ -3,7 +3,7 @@ package nats
 import (
 	"context"
 	"encoding/json"
-	"inmo-platform/contexts/crm/internal/application"
+	"inmo.platform/contexts/crm/internal/application"
 	"log"
 	"time"
 

@@ -1,4 +1,4 @@
-module inmo-platform/shared
+module inmo.platform/shared
 
 go 1.25.0
 

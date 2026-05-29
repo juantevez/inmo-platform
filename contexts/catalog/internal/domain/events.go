@@ -3,7 +3,7 @@ package domain
 import (
 	"crypto/rand"
 	"fmt"
-	"inmo-platform/shared/pkg/ddd"
+	"inmo.platform/shared/pkg/ddd"
 )
 
 // PropertyPublished se dispara cuando una propiedad pasa a estar disponible en el catálogo.

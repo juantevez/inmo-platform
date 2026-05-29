@@ -1,7 +1,7 @@
 package domain
 
 import (
-	"inmo-platform/shared/pkg/apperr"
+	"inmo.platform/shared/pkg/apperr"
 )
 
 type Currency string

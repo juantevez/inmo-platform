@@ -3,7 +3,7 @@ package inmemory
 import (
 	"context"
 	"fmt"
-	"inmo-platform/shared/pkg/ddd"
+	"inmo.platform/shared/pkg/ddd"
 )
 
 type EventPublisher struct{}

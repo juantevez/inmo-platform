@@ -2,7 +2,7 @@ package ports
 
 import (
 	"context"
-	"inmo-platform/contexts/crm/internal/domain"
+	"inmo.platform/contexts/crm/internal/domain"
 )
 
 type LeadRepository interface {

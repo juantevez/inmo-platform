@@ -3,8 +3,8 @@ package postgres
 import (
 	"context"
 	"database/sql"
-	"inmo-platform/contexts/crm/internal/domain"
-	"inmo-platform/shared/pkg/apperr"
+	"inmo.platform/contexts/crm/internal/domain"
+	"inmo.platform/shared/pkg/apperr"
 )
 
 type LeadRepository struct {

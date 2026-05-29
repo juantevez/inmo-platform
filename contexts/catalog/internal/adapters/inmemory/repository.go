@@ -2,7 +2,7 @@ package inmemory
 
 import (
 	"context"
-	"inmo-platform/contexts/catalog/internal/domain"
+	"inmo.platform/contexts/catalog/internal/domain"
 	"sync"
 )
 

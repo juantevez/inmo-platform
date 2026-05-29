@@ -1,8 +1,8 @@
 package domain
 
 import (
-	"inmo-platform/shared/pkg/apperr"
-	"inmo-platform/shared/pkg/ddd"
+	"inmo.platform/shared/pkg/apperr"
+	"inmo.platform/shared/pkg/ddd"
 )
 
 type PropertyState string

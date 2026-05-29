@@ -2,7 +2,7 @@ package inmemory
 
 import (
 	"context"
-	"inmo-platform/contexts/crm/internal/domain"
+	"inmo.platform/contexts/crm/internal/domain"
 	"log"
 	"sync"
 )

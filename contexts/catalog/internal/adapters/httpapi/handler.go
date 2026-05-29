@@ -2,8 +2,8 @@ package httpapi
 
 import (
 	"encoding/json"
-	"inmo-platform/contexts/catalog/internal/application"
-	"inmo-platform/shared/pkg/apperr"
+	"inmo.platform/contexts/catalog/internal/application"
+	"inmo.platform/shared/pkg/apperr"
 	"net/http"
 )
 

@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"inmo-platform/contexts/catalog/internal/adapters/httpapi"
-	"inmo-platform/contexts/catalog/internal/adapters/postgres"
-	"inmo-platform/contexts/catalog/internal/application"
-	"inmo-platform/shared/pkg/eventbus"
-	"inmo-platform/shared/pkg/pg"
+	"inmo.platform/contexts/catalog/internal/adapters/httpapi"
+	"inmo.platform/contexts/catalog/internal/adapters/postgres"
+	"inmo.platform/contexts/catalog/internal/application"
+	"inmo.platform/shared/pkg/eventbus"
+	"inmo.platform/shared/pkg/pg"
 	"log"
 	"net/http"
 	"time"

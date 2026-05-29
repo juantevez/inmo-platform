@@ -1,4 +1,4 @@
-module inmo.platform/contexts/catalog
+module inmo.platform/contexts/contracts
 
 go 1.25.0
 

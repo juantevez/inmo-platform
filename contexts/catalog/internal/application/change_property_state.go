@@ -2,8 +2,8 @@ package application
 
 import (
 	"context"
-	"inmo-platform/contexts/catalog/internal/ports"
-	"inmo-platform/shared/pkg/apperr"
+	"inmo.platform/contexts/catalog/internal/ports"
+	"inmo.platform/shared/pkg/apperr"
 )
 
 type ChangeStateAction string

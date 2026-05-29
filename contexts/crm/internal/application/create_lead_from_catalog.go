@@ -3,8 +3,9 @@ package application
 import (
 	"context"
 	"fmt"
-	"inmo-platform/contexts/crm/internal/domain"
-	"inmo-platform/contexts/crm/internal/ports"
+
+	"inmo.platform/contexts/crm/internal/domain"
+	"inmo.platform/contexts/crm/internal/ports"
 )
 
 type CreateAutoLeadDTO struct {

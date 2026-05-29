@@ -3,7 +3,7 @@ package ports
 import (
 	"context"
 
-	"inmo-platform/contexts/catalog/internal/domain"
+	"inmo.platform/contexts/catalog/internal/domain"
 )
 
 // PropertyRepository define el contrato para persistir y recuperar el agregado Property.

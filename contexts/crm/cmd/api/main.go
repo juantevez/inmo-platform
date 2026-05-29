@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"inmo-platform/contexts/crm/internal/adapters/nats"
-	"inmo-platform/contexts/crm/internal/adapters/postgres"
-	"inmo-platform/contexts/crm/internal/application"
-	"inmo-platform/shared/pkg/eventbus"
-	"inmo-platform/shared/pkg/pg"
+	"inmo.platform/contexts/crm/internal/adapters/nats"
+	"inmo.platform/contexts/crm/internal/adapters/postgres"
+	"inmo.platform/contexts/crm/internal/application"
+	"inmo.platform/shared/pkg/eventbus"
+	"inmo.platform/shared/pkg/pg"
 	"log"
 	"os"
 	"os/signal"

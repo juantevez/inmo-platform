@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"inmo-platform/contexts/catalog/internal/domain"
-	"inmo-platform/contexts/catalog/internal/ports"
+	"inmo.platform/contexts/catalog/internal/domain"
+	"inmo.platform/contexts/catalog/internal/ports"
 )
 
 // PublishPropertyDTO define los datos de entrada requeridos para publicar una propiedad.

@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"inmo-platform/contexts/catalog/internal/domain"
-	"inmo-platform/shared/pkg/apperr"
+	"inmo.platform/contexts/catalog/internal/domain"
+	"inmo.platform/shared/pkg/apperr"
 	"time"
 )
 

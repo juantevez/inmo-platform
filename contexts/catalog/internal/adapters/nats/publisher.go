@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"inmo-platform/shared/pkg/apperr"
-	"inmo-platform/shared/pkg/ddd"
+	"inmo.platform/shared/pkg/apperr"
+	"inmo.platform/shared/pkg/ddd"
 	"log"
 
 	"github.com/nats-io/nats.go/jetstream"
