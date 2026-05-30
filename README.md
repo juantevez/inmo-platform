@@ -31,6 +31,14 @@ inmo-platform/
 │   │   └── eventbus/        # Conector core de NATS JetStream v2
 │   └── go.mod
 └── contexts/
+    ├── auth-identity/       # Bounded Context de Autenticación e Identidad
+    │   ├── cmd/api/         # Composition Root (main.go)
+    │   ├── migrations/      # Scripts SQL (Tablas users, identity_providers, verification_tokens)
+    │   └── internal/
+    │       ├── domain/      # Agregado User, IdentityProvider, VerificationToken
+    │       ├── ports/       # Contratos: UserRepository, TokenRepository, IdentityService
+    │       ├── application/ # Casos de Uso: Register, Login, VerifyEmail, SSO Google/Meta
+    │       └── adapters/    # HTTP Handlers, Postgres Repo, Redis Token Store, OAuth adapters
     ├── catalog/             # Bounded Context de Catálogo Inmobiliario
     │   ├── cmd/api/         # Composition Root (main.go)
     │   ├── migrations/      # Scripts SQL (Tablas properties y outbox_events)
@@ -49,7 +57,80 @@ inmo-platform/
             └── adapters/    # Suscriptor Durable de NATS JetStream y Postgres Repo
 ```
 
-Flujo del Patrón Transactional Outbox
+---
+
+## Bounded Context: auth-identity
+
+Gestiona el ciclo de vida completo de la identidad del usuario bajo arquitectura hexagonal. Expone autenticación tradicional (email/password) y SSO con proveedores externos.
+
+### Endpoints
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `POST` | `/auth/register` | Registro con email y contraseña |
+| `POST` | `/auth/login` | Login tradicional, retorna access + refresh token |
+| `GET` | `/auth/verify` | Verificación de email por token |
+| `POST` | `/auth/sso/google` | Login/Registro vía Google OAuth2 |
+| `POST` | `/auth/sso/meta` | Login/Registro vía Meta (Facebook/Instagram) |
+
+### SSO con Google
+
+El frontend obtiene el `authorization_code` desde el SDK de Google y lo envía al backend. El backend lo intercambia por el perfil del usuario contra la API de Google.
+
+```bash
+POST http://localhost:8080/auth/sso/google
+Content-Type: application/json
+
+{
+  "code": "<authorization_code_de_google>"
+}
+```
+
+**Respuesta exitosa:**
+```json
+{
+  "access_token": "jwt.mock.access_token.for_user_<id>",
+  "refresh_token": "<token_64_bytes>"
+}
+```
+
+### SSO con Meta (Facebook / Instagram)
+
+El frontend obtiene el `access_token` de corta duración directamente desde el SDK de Facebook Login y lo envía al backend. El backend lo valida contra la Graph API de Meta (`/me?fields=id,name,email,picture`).
+
+```bash
+POST http://localhost:8080/auth/sso/meta
+Content-Type: application/json
+
+{
+  "access_token": "<access_token_de_meta>"
+}
+```
+
+**Respuesta exitosa:**
+```json
+{
+  "access_token": "jwt.mock.access_token.for_user_<id>",
+  "refresh_token": "<token_64_bytes>"
+}
+```
+
+**Escenarios manejados automáticamente:**
+
+- **Usuario nuevo:** se registra con status `ACTIVE` (Meta ya verificó su identidad).
+- **Login recurrente:** valida que el `provider_user_id` de Meta coincida con el registrado.
+- **Account linking:** si el email ya existe por otro proveedor (email/Google), vincula Meta a la cuenta existente (requiere que el usuario tenga status `ACTIVE`).
+- **Sin email en Meta:** retorna `422` pidiendo al frontend solicitar el email al usuario en un paso adicional.
+
+### Infraestructura de auth-identity
+
+- **PostgreSQL** (`auth_db`): tablas `users`, `identity_providers`, `verification_tokens`.
+- **Redis**: almacén de refresh tokens (TTL 7 días) y rate limiting de login (5 intentos / 15 min por IP+email).
+- **NATS JetStream**: publicación de eventos `auth.user.created` y `auth.user.logged_in` para auditoría y notificaciones asíncronas.
+
+---
+
+## Flujo del Patrón Transactional Outbox
 Para evitar la pérdida de eventos de dominio si el broker de mensajería se cae, el sistema no publica directamente en NATS desde el caso de uso, sino que delega la atomicidad a la base de datos:
 
 1. El cliente envía un POST /api/v1/properties.
