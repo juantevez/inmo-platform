@@ -55,14 +55,22 @@ inmo-platform/
     │       ├── ports/       # Contratos/Interfaces (PropertyRepository)
     │       ├── application/ # Casos de Uso transaccionales (PublishProperty)
     │       └── adapters/    # HTTP Handlers, Postgres Repo y el Outbox Worker
-    └── crm/                 # Bounded Context de CRM & Leads
-        ├── cmd/api/         # Composition Root (main.go)
-        ├── migrations/      # Scripts SQL (Tabla leads)
+    ├── crm/                 # Bounded Context de CRM & Leads
+    │   ├── cmd/api/         # Composition Root (main.go)
+    │   ├── migrations/      # Scripts SQL (Tabla leads)
+    │   └── internal/
+    │       ├── domain/      # Agregado Lead y Máquina de Estados (NEW -> CONTACTED)
+    │       ├── ports/       # Interfaces de salida
+    │       ├── application/ # Casos de uso asincrónicos (CreateAutoLead)
+    │       └── adapters/    # Suscriptor Durable de NATS JetStream y Postgres Repo
+    └── finances/            # Bounded Context de Finanzas & Liquidaciones
+        ├── cmd/api/         # Composition Root (main.go, puerto :8082)
+        ├── migrations/      # Scripts SQL (Tablas settlements y settlement_concepts)
         └── internal/
-            ├── domain/      # Agregado Lead y Máquina de Estados (NEW -> CONTACTED)
-            ├── ports/       # Interfaces de salida
-            ├── application/ # Casos de uso asincrónicos (CreateAutoLead)
-            └── adapters/    # Suscriptor Durable de NATS JetStream y Postgres Repo
+            ├── domain/      # Agregado Settlement, Entidad Concept, Máquina de estados (OPEN→CLOSED→PAID)
+            ├── ports/       # Contratos: SettlementRepository, ContractService, EventDispatcher
+            ├── application/ # Casos de Uso: CreateSettlement, AddConcept, CloseSettlement
+            └── adapters/    # HTTP Handlers, Postgres Repo, Stubs de servicios externos
 ```
 
 ---
@@ -160,6 +168,98 @@ DRAFT ──► ACTIVE ──► RENEWED
 - **ACTIVE:** contrato vigente (firmado por ambas partes).
 - **RENEWED:** contrato activo que fue renovado al vencer.
 - **TERMINATED:** estado final, no admite más transiciones.
+
+---
+
+## Bounded Context: finances
+
+Gestiona las liquidaciones mensuales de los contratos inmobiliarios. Permite crear una liquidación por período, cargar conceptos detallados (alquiler, impuestos, servicios, expensas) y cerrarla para su emisión.
+
+Corre de forma independiente en el **puerto `:8082`**.
+
+### Endpoints
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `POST` | `/api/v1/settlements/create` | Crear una liquidación nueva (estado inicial `OPEN`) |
+| `POST` | `/api/v1/settlements/concepts/add` | Agregar un concepto a una liquidación abierta |
+| `POST` | `/api/v1/settlements/close` | Cerrar la liquidación (`OPEN → CLOSED`) |
+
+### Máquina de Estados
+
+```
+OPEN ──► CLOSED ──► PAID
+```
+
+- **OPEN:** estado inicial; acepta conceptos.
+- **CLOSED:** liquidación emitida; no admite más modificaciones.
+- **PAID:** estado final tras el cobro/pago efectivo.
+
+### Tipos de Concepto soportados
+
+| Tipo | Descripción |
+|------|-------------|
+| `RENT` | Alquiler mensual |
+| `TAX` | Impuestos (ABL, Inmobiliario, etc.) |
+| `EXPENSES` | Expensas de la propiedad |
+| `ADJUSTMENT` | Ajuste por índice o corrección |
+| `UTILITY_ELECTRICITY` | Servicio eléctrico |
+| `UTILITY_WATER` | Servicio de agua |
+| `UTILITY_GAS` | Servicio de gas |
+| `UTILITY_INTERNET` | Internet |
+| `UTILITY_CABLE_TV` | Cable / TV paga |
+
+### Infraestructura de finances
+
+- **PostgreSQL** (`inmo_catalog_db`): tablas `settlements` y `settlement_concepts`.
+  - Invariante a nivel BD: un contrato solo puede tener una liquidación por período (`UNIQUE contract_id + period`).
+- **ContractService / EventDispatcher:** implementados como stubs; preparados para integración real con los contextos `contracts` y el bus de eventos.
+
+### Migración
+
+```bash
+docker exec -i inmo-postgres psql -U inmo_user -d inmo_catalog_db < contexts/finances/migrations/000001_create_finances_settlements.up.sql
+```
+
+### Ejecución en Desarrollo
+
+```bash
+go run ./contexts/finances/cmd/api
+```
+
+### Prueba de Integración
+
+```bash
+# 1. Crear una liquidación para el período 2026-05
+curl -X POST http://localhost:8082/api/v1/settlements/create \
+  -H "Content-Type: application/json" \
+  -d '{"settlement_id":"liq-001","contract_id":"contract-abc","period":"2026-05"}'
+
+# 2. Agregar el concepto de alquiler
+curl -X POST http://localhost:8082/api/v1/settlements/concepts/add \
+  -H "Content-Type: application/json" \
+  -d '{"settlement_id":"liq-001","concept_id":"con-001","description":"Alquiler Mayo 2026","concept_type":"RENT","amount":250000}'
+
+# 3. Agregar expensas
+curl -X POST http://localhost:8082/api/v1/settlements/concepts/add \
+  -H "Content-Type: application/json" \
+  -d '{"settlement_id":"liq-001","concept_id":"con-002","description":"Expensas Mayo","concept_type":"EXPENSES","amount":45000}'
+
+# 4. Cerrar la liquidación
+curl -X POST http://localhost:8082/api/v1/settlements/close \
+  -H "Content-Type: application/json" \
+  -d '{"settlement_id":"liq-001"}'
+```
+
+### Comprobación en Base de Datos
+
+```bash
+# Verificar la liquidación creada
+docker exec -it inmo-postgres psql -U inmo_user -d inmo_catalog_db -c "SELECT id, contract_id, period, status FROM settlements;"
+
+# Verificar los conceptos cargados
+docker exec -it inmo-postgres psql -U inmo_user -d inmo_catalog_db -c "SELECT id, description, concept_type, amount FROM settlement_concepts;"
+```
 
 ---
 
