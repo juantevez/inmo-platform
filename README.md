@@ -30,23 +30,23 @@ inmo-platform/
 │   │   ├── pg/              # Pool de conexiones optimizado para Postgres
 │   │   └── eventbus/        # Conector core de NATS JetStream v2
 │   └── go.mod
-├── contexts/
-│   ├── catalog/             # Bounded Context de Catálogo Inmobiliario
-│   │   ├── cmd/api/         # Composition Root (main.go)
-│   │   ├── migrations/      # Scripts SQL (Tablas properties y outbox_events)
-│   │   └── internal/
-│   │       ├── domain/      # Corazón de negocio (Invariantes de Property, Price, Location)
-│   │       ├── ports/       # Contratos/Interfaces (PropertyRepository)
-│   │       ├── application/ # Casos de Uso transaccionales (PublishProperty)
-│   │       └── adapters/    # HTTP Handlers, Postgres Repo y el Outbox Worker
-│   └── crm/                 # Bounded Context de CRM & Leads
-│       ├── cmd/api/         # Composition Root (main.go)
-│       ├── migrations/      # Scripts SQL (Tabla leads)
-│       └── internal/
-│           ├── domain/      # Agregado Lead y Máquina de Estados (NEW -> CONTACTED)
-│           ├── ports/       # Interfaces de salida
-│           ├── application/ # Casos de uso asincrónicos (CreateAutoLead)
-│           └── adapters/    # Suscriptor Durable de NATS JetStream y Postgres Repo
+└── contexts/
+    ├── catalog/             # Bounded Context de Catálogo Inmobiliario
+    │   ├── cmd/api/         # Composition Root (main.go)
+    │   ├── migrations/      # Scripts SQL (Tablas properties y outbox_events)
+    │   └── internal/
+    │       ├── domain/      # Corazón de negocio (Invariantes de Property, Price, Location)
+    │       ├── ports/       # Contratos/Interfaces (PropertyRepository)
+    │       ├── application/ # Casos de Uso transaccionales (PublishProperty)
+    │       └── adapters/    # HTTP Handlers, Postgres Repo y el Outbox Worker
+    └── crm/                 # Bounded Context de CRM & Leads
+        ├── cmd/api/         # Composition Root (main.go)
+        ├── migrations/      # Scripts SQL (Tabla leads)
+        └── internal/
+            ├── domain/      # Agregado Lead y Máquina de Estados (NEW -> CONTACTED)
+            ├── ports/       # Interfaces de salida
+            ├── application/ # Casos de uso asincrónicos (CreateAutoLead)
+            └── adapters/    # Suscriptor Durable de NATS JetStream y Postgres Repo
 ```
 
 Flujo del Patrón Transactional Outbox
