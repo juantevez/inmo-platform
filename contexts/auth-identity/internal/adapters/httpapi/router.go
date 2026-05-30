@@ -13,8 +13,9 @@ func NewRouter(handler *AuthHandler) http.Handler {
 	mux.HandleFunc("POST /auth/login", handler.HandleLoginPassword)
 	mux.HandleFunc("GET /auth/verify", handler.HandleVerifyEmail)
 
-	// Los handlers de SSO y OTPs se irán acoplando de la misma forma acá abajo...
-	// mux.HandleFunc("POST /auth/sso/google", handler.HandleGoogleLogin)
+	// 🚀 ACUPLAMIENTO DE SSO (Habilitados para Google y Meta)
+	mux.HandleFunc("POST /auth/sso/google", handler.HandleGoogleLogin)
+	mux.HandleFunc("POST /auth/sso/meta", handler.HandleMetaLogin) // ◄ Cableado quirúrgico de Meta
 
 	return mux
 }

@@ -12,6 +12,7 @@ import (
 
 	// Importamos nuestros paquetes internos del Bounded Context
 	"inmo.platform/contexts/auth-identity/internal/adapters/httpapi"
+	"inmo.platform/contexts/auth-identity/internal/adapters/oauth"
 	"inmo.platform/contexts/auth-identity/internal/adapters/postgres"
 	"inmo.platform/contexts/auth-identity/internal/adapters/redis"
 	"inmo.platform/contexts/auth-identity/internal/application"
@@ -69,11 +70,14 @@ func main() {
 	loginPassUC := application.NewLoginPasswordUseCase(userRepo, tokenRepo, tokenService, eventPublisher, uuidGenerator)
 	verifyEmailUC := application.NewVerifyEmailUseCase(userRepo, tokenRepo, tokenService, eventPublisher, uuidGenerator)
 
-	// Nota: Si pasás las credenciales de Google Developer Console por Env, instanciás el adapter real acá
-	loginGoogleUC := application.NewLoginSSOGoogleUseCase(userRepo, tokenRepo, nil, tokenService, eventPublisher, uuidGenerator)
+	metaAdapter := oauth.NewMetaAdapter()
+
+	loginGoogleUC := application.NewLoginSSOGoogleUseCase(userRepo, tokenRepo, &stubIdentityService{}, tokenService, eventPublisher, uuidGenerator)
+	loginMetaUC := application.NewLoginSSOMetaUseCase(userRepo, tokenRepo, metaAdapter, tokenService, eventPublisher, uuidGenerator)
 
 	// 7. Conectar la capa HTTP entubando los Casos de Uso al enrutador nativo
-	authHandler := httpapi.NewAuthHandler(registerUC, loginPassUC, verifyEmailUC, loginGoogleUC)
+	//authHandler := httpapi.NewAuthHandler(registerUC, loginPassUC, verifyEmailUC, loginGoogleUC)
+	authHandler := httpapi.NewAuthHandler(registerUC, loginPassUC, verifyEmailUC, loginGoogleUC, loginMetaUC)
 	router := httpapi.NewRouter(authHandler)
 
 	// 8. Levantar el servidor HTTP escuchando en el puerto configurado
@@ -119,7 +123,25 @@ func (s *stubTokenService) GenerateRefreshToken() (string, error) {
 type stubEventPublisher struct{}
 
 func (s *stubEventPublisher) PublishEvent(ctx context.Context, event ports.AuthEvent) error {
-	// Simula la salida hacia NATS JetStream imprimiendo en la consola local
 	log.Printf("[NATS BUS OUT] Evento publicado en el subject '%s' para el usuario: %s\n", event.Name, event.UserID)
 	return nil
+}
+
+type stubIdentityService struct{}
+
+func (s *stubIdentityService) VerifyGoogleCode(ctx context.Context, code string) (*ports.SSOResult, error) {
+	// 📢 NUESTRO ECHO/LOG PARA DEBUGGEAR EN LA CONSOLA DE DOCKER:
+	log.Println("==================================================")
+	log.Printf("📥 ¡ENTRANDO AL STUB DE GOOGLE! El 'code' recibido es: %s\n", code)
+	log.Println("==================================================")
+
+	// Forzamos el retorno exitoso simulado
+	return &ports.SSOResult{
+		ProviderUserID: "google-uid-mock-123456",
+		Email:          "diego.maradona@example.com",
+	}, nil
+}
+
+func (s *stubIdentityService) VerifyMetaToken(ctx context.Context, accessToken string) (*ports.SSOResult, error) {
+	return nil, fmt.Errorf("no implementado en stub")
 }
