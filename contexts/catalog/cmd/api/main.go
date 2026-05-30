@@ -2,14 +2,16 @@ package main
 
 import (
 	"context"
+	"log"
+	"net/http"
+	"time"
+
 	"inmo.platform/contexts/catalog/internal/adapters/httpapi"
+	catalogNats "inmo.platform/contexts/catalog/internal/adapters/nats"
 	"inmo.platform/contexts/catalog/internal/adapters/postgres"
 	"inmo.platform/contexts/catalog/internal/application"
 	"inmo.platform/shared/pkg/eventbus"
 	"inmo.platform/shared/pkg/pg"
-	"log"
-	"net/http"
-	"time"
 )
 
 func main() {
@@ -43,18 +45,29 @@ func main() {
 	_ = natsConn.EnsureStream(initCtx, "catalog", []string{"catalog.property.*"})
 	initCancel()
 
-	// 3. Inicializar el Repositorio de Postgres (implementa ports.PropertyRepository)
+	// 3. Inicializar el Repositorio de Postgres
 	propertyRepo := postgres.NewPropertyRepository(dbPool)
 
 	// 4. Arrancar el Outbox Worker en segundo plano pasándole NATS
 	outboxWorker := postgres.NewOutboxWorker(dbPool, natsConn.JS)
 	go outboxWorker.Start(ctx, 20*time.Second)
 
-	// 5. Inicializar Caso de Uso pasándole el pool de conexiones Y el repositorio
+	// =========================================================================
+	// 🛠️ PUNTO 4.5: Instanciar y Arrancar el Suscriptor asincrónico de Contratos
+	// =========================================================================
+	contractSubscriber := catalogNats.NewContractSubscriber(dbPool, natsConn.JS)
+	go func() {
+		if err := contractSubscriber.StartConsume(ctx); err != nil {
+			log.Printf("[CATALOG ERROR] Error crítico en el suscriptor de contratos: %v\n", err)
+		}
+	}()
+	// =========================================================================
+
+	// 5. Inicializar Caso de Uso
 	publishUseCase := application.NewPublishPropertyUseCase(dbPool, propertyRepo)
 
 	// 6. Inicializar Adaptadores de Entrada (HTTP API)
-	propertyHandler := httpapi.NewPropertyHandler(publishUseCase, nil) // Pasamos nil en changeState por simplicidad ahora
+	propertyHandler := httpapi.NewPropertyHandler(publishUseCase, nil)
 	router := httpapi.NewRouter(propertyHandler)
 
 	// 7. Encender Servidor HTTP

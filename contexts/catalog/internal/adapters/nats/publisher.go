@@ -2,40 +2,97 @@ package nats
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
-	"inmo.platform/shared/pkg/apperr"
-	"inmo.platform/shared/pkg/ddd"
 	"log"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-type EventPublisher struct {
-	js jetstream.JetStream
+// ContractActivatedEvent mapea el espejo de lo que envía el módulo de Contratos
+type ContractActivatedEvent struct {
+	ID         string `json:"id"`
+	PropertyID string `json:"property_id"`
 }
 
-func NewEventPublisher(js jetstream.JetStream) *EventPublisher {
-	return &EventPublisher{js: js}
+type ContractSubscriber struct {
+	db *sql.DB
+	js jetstream.JetStream // 🚀 Corregido: Usamos el tipo estándar de la interfaz
 }
 
-func (p *EventPublisher) Publish(ctx context.Context, events ...ddd.DomainEvent) error {
-	for _, event := range events {
-		// 1. Serializar el evento a JSON
-		payload, err := json.Marshal(event)
-		if err != nil {
-			return apperr.NewInternal("error al serializar evento de dominio a json", err)
-		}
-
-		// 2. Publicar en JetStream usando su EventName como Subject jerárquico
-		subject := event.EventName() // ej: "catalog.property.published"
-
-		_, err = p.js.Publish(ctx, subject, payload)
-		if err != nil {
-			return apperr.NewInternal(fmt.Sprintf("error al enviar mensaje al subject %s", subject), err)
-		}
-
-		log.Printf("[NATS JETSTREAM] Mensaje enviado a JetStream -> Subject: %s | ID: %s\n", subject, event.AggregateID())
+func NewContractSubscriber(db *sql.DB, js jetstream.JetStream) *ContractSubscriber {
+	return &ContractSubscriber{
+		db: db,
+		js: js,
 	}
+}
+
+// StartConsume inicializa el consumidor durable y empieza a escuchar en background
+func (s *ContractSubscriber) StartConsume(ctx context.Context) error {
+	// 1. Asegurar que exista el consumidor Durable para no perder mensajes si nos caemos
+	cons, err := s.js.CreateOrUpdateConsumer(ctx, "contracts", jetstream.ConsumerConfig{
+		Durable:       "catalog-contract-sync",
+		FilterSubject: "contracts.contract.activated",
+		AckPolicy:     jetstream.AckExplicitPolicy,
+	})
+	if err != nil {
+		return fmt.Errorf("error al crear consumidor durable en catálogo: %w", err)
+	}
+
+	log.Println("[CATALOG NATS] 📡 Escuchando firmas de contratos en 'contracts.contract.activated'...")
+
+	// 2. Consumir mensajes en bucle asincrónico
+	iter, err := cons.Messages()
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		for {
+			msg, err := iter.Next()
+			if err != nil {
+				log.Printf("[CATALOG NATS ERROR] Error al iterar mensajes: %v\n", err)
+				return
+			}
+
+			// Procesar el mensaje de forma aislada
+			if err := s.processMessage(ctx, msg); err != nil {
+				log.Printf("[CATALOG NATS ERROR] Falló el procesamiento del evento: %v\n", err)
+				// Si falla, no le damos ACK, NATS lo va a reintentar según la política
+				continue
+			}
+
+			// Si todo salió bien, le avisamos a NATS que lo limpie de la cola
+			_ = msg.Ack()
+		}
+	}()
+
+	return nil
+}
+
+func (s *ContractSubscriber) processMessage(ctx context.Context, msg jetstream.Msg) error {
+	var event ContractActivatedEvent
+	if err := json.Unmarshal(msg.Data(), &event); err != nil {
+		return fmt.Errorf("error al deserializar evento de contratos: %w", err)
+	}
+
+	log.Printf("[CATALOG NATS] ¡Contrato firmado detectado! Dando de baja la propiedad ID: %s\n", event.PropertyID)
+
+	// 3. Ejecutar la mutación en la Base de Datos de Catálogo de forma directa o llamando a un caso de uso
+	// 🚀 CORREGIDO: Columna 'state' en lugar de 'status'
+	query := `UPDATE properties SET state = 'RENTED', updated_at = CURRENT_TIMESTAMP WHERE id = $1;`
+	res, err := s.db.ExecContext(ctx, query, event.PropertyID)
+	if err != nil {
+		return fmt.Errorf("error al actualizar estado de la propiedad en bd: %w", err)
+	}
+
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		log.Printf("[CATALOG NATS WARNING] No se encontró ninguna propiedad con ID: %s para dar de baja\n", event.PropertyID)
+	} else {
+		log.Printf("[CATALOG] Propiedad %s marcada exitosamente como alquilada.\n", event.PropertyID)
+	}
+
 	return nil
 }
