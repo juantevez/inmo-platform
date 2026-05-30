@@ -5,3 +5,6 @@ bin/
 dist/
 *.test
 coverage.out
+
+
+main

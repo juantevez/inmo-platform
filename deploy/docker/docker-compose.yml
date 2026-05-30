@@ -103,6 +103,21 @@ services:
     networks:
       - inmo-network
 
+  finances:
+    build:
+      context: ../../contexts/finances
+      dockerfile: Dockerfile
+      network: host
+    container_name: inmo-finances
+    ports:
+      - "8082:8082"
+    environment:
+      - DATABASE_URL=postgres://inmo_user:inmo_password@inmo-postgres:5432/inmo_catalog_db?sslmode=disable
+    depends_on:
+      - postgres # Espera a que la base de datos esté arriba para iniciar
+    networks:
+      - inmo-network # Asegurate de usar la misma red que tus otros servicios
+
 volumes:
   postgres_data:
     driver: local
