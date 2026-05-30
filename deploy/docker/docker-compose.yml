@@ -1,35 +1,36 @@
 version: '3.8'
 
 services:
-  # --- DATABASE: PostgreSQL ---
   postgres:
     image: postgres:16-alpine
     container_name: inmo-postgres
     environment:
       POSTGRES_USER: inmo_user
       POSTGRES_PASSWORD: inmo_password
-      POSTGRES_DB: inmo_catalog_db
+      POSTGRES_DB: inmo_catalog_db # Base por defecto
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # 🚀 Truco: Creamos la base de auth_db automáticamente al levantar por primera vez
+      - ./init-multiple-databases.sh:/docker-entrypoint-initdb.d/init-multiple-databases.sh
     networks:
       - inmo-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U inmo_user -d inmo_catalog_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "psql -U inmo_user -d inmo_catalog_db -c 'SELECT 1;' && psql -U inmo_user -d auth_db -c 'SELECT 1;'"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+      start_period: 25s
 
   # --- MESSAGE BROKER: NATS con JetStream ---
   nats:
     image: nats:2.10-alpine
     container_name: inmo-nats
-    # El flag -js activa JetStream, -sd define dónde guarda los mensajes persistidos
     command: ["-js", "-sd", "/data"]
     ports:
-      - "4222:4222" # Puerto de conexión de clientes Go
-      - "8222:8222" # Puerto de monitoreo HTTP (opcional, para chusmear el estado)
+      - "4222:4222" 
+      - "8222:8222" 
     volumes:
       - nats_data:/data
     networks:
@@ -39,6 +40,68 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+  # --- CACHE & RATE LIMITS: Redis ---
+  redis:
+    image: redis:7-alpine
+    container_name: inmo-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - inmo-network
+
+  # --- MIGRATIONS: Corredor Automático para Auth ---
+  auth-db-migration:
+    image: migrate/migrate
+    container_name: inmo-auth-migration
+    volumes:
+      # Apunta relativo a la carpeta de migraciones dentro del contexto
+      - ../../contexts/auth-identity/migrations:/migrations
+    command:
+      - -path=/migrations
+      - -database=postgres://inmo_user:inmo_password@postgres:5432/auth_db?sslmode=disable
+      - up
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - inmo-network
+
+  # --- MICROSERVICE: Auth & Identity (Tu módulo en Go) ---
+  auth-identity:
+    build:
+      context: ../../contexts/auth-identity
+      dockerfile: Dockerfile
+      network: host
+    container_name: inmo-auth-identity
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_PORT=:8080
+      - DATABASE_URL=postgres://inmo_user:inmo_password@postgres:5432/auth_db?sslmode=disable
+      - REDIS_URL=redis:6379
+      # El día que integres NATS real, la URL interna de conexión será nats://nats:4222
+      - NATS_URL=nats://nats:4222 
+      # 🚀 Inyección de secretos de SSO desde el archivo .env hacia Go:
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - META_APP_ID=${META_APP_ID}
+      - META_CLIENT_SECRET=${META_CLIENT_SECRET}      
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-db-migration:
+        condition: service_completed_successfully # Espera a que las migraciones terminen bien
+    networks:
+      - inmo-network
 
 volumes:
   postgres_data:
