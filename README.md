@@ -39,6 +39,14 @@ inmo-platform/
     │       ├── ports/       # Contratos: UserRepository, TokenRepository, IdentityService
     │       ├── application/ # Casos de Uso: Register, Login, VerifyEmail, SSO Google/Meta
     │       └── adapters/    # HTTP Handlers, Postgres Repo, Redis Token Store, OAuth adapters
+    ├── contracts/           # Bounded Context de Contratos Inmobiliarios
+    │   ├── cmd/api/         # Composition Root (main.go)
+    │   ├── migrations/      # Scripts SQL (Tabla contracts)
+    │   └── internal/
+    │       ├── domain/      # Agregado Contract, máquina de estados (DRAFT→ACTIVE→RENEWED/TERMINATED)
+    │       ├── ports/       # Contratos: ContractRepository
+    │       ├── application/ # Casos de Uso: CreateContract, ActivateContract
+    │       └── adapters/    # HTTP Handlers, Postgres Repo, Outbox Worker
     ├── catalog/             # Bounded Context de Catálogo Inmobiliario
     │   ├── cmd/api/         # Composition Root (main.go)
     │   ├── migrations/      # Scripts SQL (Tablas properties y outbox_events)
@@ -127,6 +135,31 @@ Content-Type: application/json
 - **PostgreSQL** (`auth_db`): tablas `users`, `identity_providers`, `verification_tokens`.
 - **Redis**: almacén de refresh tokens (TTL 7 días) y rate limiting de login (5 intentos / 15 min por IP+email).
 - **NATS JetStream**: publicación de eventos `auth.user.created` y `auth.user.logged_in` para auditoría y notificaciones asíncronas.
+
+---
+
+## Bounded Context: contracts
+
+Gestiona el ciclo de vida de los contratos inmobiliarios con una máquina de estados estricta y publicación de eventos vía Transactional Outbox.
+
+### Endpoints
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `POST` | `/api/v1/contracts` | Crear un contrato nuevo (estado inicial `DRAFT`) |
+| `POST` | `/api/v1/contracts/activate` | Activar un contrato (transición `DRAFT → ACTIVE`) |
+
+### Máquina de Estados
+
+```
+DRAFT ──► ACTIVE ──► RENEWED
+                └──► TERMINATED
+```
+
+- **DRAFT:** estado inicial al crear el contrato (pendiente de firma).
+- **ACTIVE:** contrato vigente (firmado por ambas partes).
+- **RENEWED:** contrato activo que fue renovado al vencer.
+- **TERMINATED:** estado final, no admite más transiciones.
 
 ---
 
