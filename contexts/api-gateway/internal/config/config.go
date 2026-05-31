@@ -5,6 +5,7 @@ import "os"
 type Config struct {
 	Port           string
 	CatalogURL     string
+	CRMURL         string
 	AuthURL        string
 	MaintenanceURL string
 	FinancesURL    string
@@ -14,13 +15,14 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		Port:           getEnv("GATEWAY_PORT", ":8000"), // 🚀 Cambiado a :8000
-		CatalogURL:     getEnv("CATALOG_SERVICE_URL", "http://inmo-catalog:8081"),
-		AuthURL:        getEnv("AUTH_SERVICE_URL", "http://inmo-auth-identity:8080"),
-		MaintenanceURL: getEnv("MAINTENANCE_SERVICE_URL", "http://inmo-maintenance:8083"),
-		FinancesURL:    getEnv("FINANCES_SERVICE_URL", "http://inmo-finances:8082"),
-		ContractsURL:   getEnv("CONTRACTS_SERVICE_URL", "http://inmo-contracts:8085"),
-		JWTSecret:      getEnv("JWT_SECRET", "tu_super_secreto_local"),
+		Port:           getEnv("GATEWAY_PORT",            ":8000"),
+		CatalogURL:     getEnv("CATALOG_SERVICE_URL",     "http://127.0.0.1:8081"),
+		CRMURL:         getEnv("CRM_SERVICE_URL",         "http://127.0.0.1:8084"),
+		AuthURL:        getEnv("AUTH_SERVICE_URL",        "http://127.0.0.1:8086"),
+		MaintenanceURL: getEnv("MAINTENANCE_SERVICE_URL", "http://127.0.0.1:8085"),
+		FinancesURL:    getEnv("FINANCES_SERVICE_URL",    "http://127.0.0.1:8082"),
+		ContractsURL:   getEnv("CONTRACTS_SERVICE_URL",   "http://127.0.0.1:8083"),
+		JWTSecret:      getEnv("JWT_SECRET",              "dev_secret_local"),
 	}
 }
 

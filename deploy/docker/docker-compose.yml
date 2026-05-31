@@ -84,6 +84,7 @@ services:
     environment:
       - GATEWAY_PORT=:8000
       - CATALOG_SERVICE_URL=http://inmo-catalog:8081
+      - CRM_SERVICE_URL=http://inmo-crm:8084
       - AUTH_SERVICE_URL=http://inmo-auth-identity:8080
       - MAINTENANCE_SERVICE_URL=http://inmo-maintenance:8083
       - FINANCES_SERVICE_URL=http://inmo-finances:8082
