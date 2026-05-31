@@ -63,13 +63,21 @@ inmo-platform/
     │       ├── ports/       # Interfaces de salida
     │       ├── application/ # Casos de uso asincrónicos (CreateAutoLead)
     │       └── adapters/    # Suscriptor Durable de NATS JetStream y Postgres Repo
-    └── finances/            # Bounded Context de Finanzas & Liquidaciones
-        ├── cmd/api/         # Composition Root (main.go, puerto :8082)
-        ├── migrations/      # Scripts SQL (Tablas settlements y settlement_concepts)
+    ├── finances/            # Bounded Context de Finanzas & Liquidaciones
+    │   ├── cmd/api/         # Composition Root (main.go, puerto :8082)
+    │   ├── migrations/      # Scripts SQL (Tablas settlements y settlement_concepts)
+    │   └── internal/
+    │       ├── domain/      # Agregado Settlement, Entidad Concept, Máquina de estados (OPEN→CLOSED→PAID)
+    │       ├── ports/       # Contratos: SettlementRepository, ContractService, EventDispatcher
+    │       ├── application/ # Casos de Uso: CreateSettlement, AddConcept, CloseSettlement
+    │       └── adapters/    # HTTP Handlers, Postgres Repo, Stubs de servicios externos
+    └── maintenance/         # Bounded Context de Mantenimiento & Incidencias
+        ├── cmd/api/         # Composition Root (main.go, puerto :8083)
+        ├── migrations/      # Scripts SQL (Tabla tickets)
         └── internal/
-            ├── domain/      # Agregado Settlement, Entidad Concept, Máquina de estados (OPEN→CLOSED→PAID)
-            ├── ports/       # Contratos: SettlementRepository, ContractService, EventDispatcher
-            ├── application/ # Casos de Uso: CreateSettlement, AddConcept, CloseSettlement
+            ├── domain/      # Agregado Ticket, Value Objects Quote y Evidence, máquina de estados
+            ├── ports/       # Contratos: TicketRepository, CatalogService, EventDispatcher
+            ├── application/ # Casos de Uso: CreateTicket, AssignProvider, SubmitQuote, ApproveTicket, CloseTicket
             └── adapters/    # HTTP Handlers, Postgres Repo, Stubs de servicios externos
 ```
 
