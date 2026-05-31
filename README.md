@@ -11,7 +11,7 @@ El sistema implementa consistencia eventual y resiliencia extrema mediante el pa
 El proyecto está estructurado como un monorepo multi-módulo en Go que divide las fronteras del negocio en **Bounded Contexts** totalmente desacoplados a nivel de base de datos y lógica, comunicados de forma asincrónica.
 
 ### Componentes de Infraestructura:
-* **API Gateway / HTTP Router:** Punto de entrada síncrono para los clientes del sistema.
+* **API Gateway / HTTP Router:** Punto de entrada único (puerto `:8000`), centraliza CORS y validación JWT antes de reenviar al microservicio correspondiente.
 * **PostgreSQL:** Persistencia transaccional ACID (bases de datos independientes por contexto).
 * **NATS JetStream (v2):** Mensajería persistente con soporte para *Durable Consumers*.
 * **Outbox Worker (Relay):** Proceso en segundo plano nativo en Go (`goroutine` + `time.Ticker`) encargado del vaciado atómico de la bandeja de salida.
@@ -31,6 +31,12 @@ inmo-platform/
 │   │   └── eventbus/        # Conector core de NATS JetStream v2
 │   └── go.mod
 └── contexts/
+    ├── api-gateway/         # Punto de entrada único del sistema (puerto :8000)
+    │   ├── cmd/gateway/     # Composition Root (main.go)
+    │   └── internal/
+    │       ├── config/      # Carga de configuración vía variables de entorno
+    │       ├── middleware/  # CORS global y validación JWT (AuthValidator)
+    │       └── proxy/       # Router con reverse proxies hacia cada bounded context
     ├── auth-identity/       # Bounded Context de Autenticación e Identidad
     │   ├── cmd/api/         # Composition Root (main.go)
     │   ├── migrations/      # Scripts SQL (Tablas users, identity_providers, verification_tokens)
@@ -79,6 +85,69 @@ inmo-platform/
             ├── ports/       # Contratos: TicketRepository, CatalogService, EventDispatcher
             ├── application/ # Casos de Uso: CreateTicket, AssignProvider, SubmitQuote, ApproveTicket, CloseTicket
             └── adapters/    # HTTP Handlers, Postgres Repo, Stubs de servicios externos
+```
+
+---
+
+## API Gateway
+
+Punto de entrada único del sistema. Corre en el **puerto `:8000`** y actúa como reverse proxy hacia todos los bounded contexts. Centraliza dos responsabilidades transversales: CORS y autenticación JWT.
+
+### Responsabilidades
+
+- **Enrutamiento:** despacha cada ruta al microservicio correcto sin lógica de negocio propia.
+- **CORS:** un middleware global intercepta cualquier header CORS que los upstreams puedan devolver, los limpia y aplica los propios; elimina duplicados en todas las respuestas.
+- **Validación JWT:** las rutas privadas exigen un `Authorization: Bearer <token>`. El gateway valida el token y, si es válido, inyecta `X-User-Id` y `X-User-Role` como headers hacia los servicios internos — los microservicios nunca re-validan el JWT.
+
+### Tabla de Rutas
+
+| Acceso | Método | Ruta | Upstream |
+|--------|--------|------|----------|
+| Pública | `POST` | `/api/v1/auth/login` | auth-identity |
+| Pública | `POST` | `/api/v1/auth/register` | auth-identity |
+| Pública | `GET` | `/api/v1/auth/verify` | auth-identity |
+| Pública | `POST` | `/api/v1/auth/sso/*` | auth-identity |
+| Pública | `GET` | `/api/v1/properties` | catalog |
+| Pública | `GET` | `/api/v1/properties/*` | catalog |
+| Privada | `*` | `/api/v1/properties*` | catalog |
+| Privada | `*` | `/api/v1/leads*` | crm |
+| Privada | `*` | `/api/v1/tickets*` | maintenance |
+| Privada | `*` | `/api/v1/finances*` | finances |
+| Privada | `*` | `/api/v1/contracts*` | contracts |
+
+### Variables de Entorno
+
+| Variable | Default | Descripción |
+|----------|---------|-------------|
+| `GATEWAY_PORT` | `:8000` | Puerto en que escucha el gateway |
+| `CATALOG_SERVICE_URL` | `http://127.0.0.1:8081` | URL del servicio Catalog |
+| `CRM_SERVICE_URL` | `http://127.0.0.1:8084` | URL del servicio CRM |
+| `AUTH_SERVICE_URL` | `http://127.0.0.1:8086` | URL del servicio Auth |
+| `MAINTENANCE_SERVICE_URL` | `http://127.0.0.1:8085` | URL del servicio Maintenance |
+| `FINANCES_SERVICE_URL` | `http://127.0.0.1:8082` | URL del servicio Finances |
+| `CONTRACTS_SERVICE_URL` | `http://127.0.0.1:8083` | URL del servicio Contracts |
+| `JWT_SECRET` | `dev_secret_local` | Secreto para verificar los tokens JWT |
+
+### Ejecución en Desarrollo
+
+```bash
+go run ./contexts/api-gateway/cmd/gateway
+```
+
+### Prueba Rápida
+
+```bash
+# Ruta pública — no requiere token
+curl http://localhost:8000/api/v1/properties
+
+# Ruta privada — requiere token válido
+curl http://localhost:8000/api/v1/leads \
+  -H "Authorization: Bearer <tu_jwt>"
+
+# Preflight CORS
+curl -X OPTIONS http://localhost:8000/api/v1/properties \
+  -H "Origin: http://localhost:3000" \
+  -H "Access-Control-Request-Method: POST" -v
 ```
 
 ---
