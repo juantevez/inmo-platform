@@ -23,10 +23,48 @@ func AuthValidator(jwtSecret string) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Supongamos que del token extraemos que el usuario es "user-123" y tiene rol "TENANT"
-			// Inyectamos estos datos en los Headers para que los microservicios de atrás no tengan que re-validar el JWT
-			r.Header.Set("X-User-Id", "user-123")
-			r.Header.Set("X-User-Role", "TENANT")
+			// 🚀 Simulación de Claims obtenidos del JWT real.
+			// Ahora simulamos un usuario que tiene múltiples roles asignados en la base de datos.
+			userID := "user-123"
+			userRoles := []string{"PROPIETARIO", "INQUILINO"}
+
+			// Inyectamos los datos en los Headers de la request
+			r.Header.Set("X-User-Id", userID)
+
+			// Unimos el slice de strings en un único string separado por comas: "PROPIETARIO,INQUILINO"
+			r.Header.Set("X-User-Roles", strings.Join(userRoles, ","))
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// 🔒 Middleware complementario para validar roles específicos en rutas puntuales del Gateway
+func RequireRole(requiredRole string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			rolesHeader := r.Header.Get("X-User-Roles")
+
+			// Si el header está vacío, el usuario directamente no pasó por AuthValidator o no tiene roles
+			if rolesHeader == "" {
+				http.Error(w, `{"error": "Prohibido", "message": "No tenés los permisos necesarios"}`, http.StatusForbidden)
+				return
+			}
+
+			// Validamos si el rol requerido se encuentra en la lista
+			roles := strings.Split(rolesHeader, ",")
+			hasRole := false
+			for _, role := range roles {
+				if strings.TrimSpace(role) == requiredRole {
+					hasRole = true
+					break
+				}
+			}
+
+			if !hasRole {
+				http.Error(w, `{"error": "Prohibido", "message": "Se requiere el rol de `+requiredRole+` para realizar esta acción"}`, http.StatusForbidden)
+				return
+			}
 
 			next.ServeHTTP(w, r)
 		})
