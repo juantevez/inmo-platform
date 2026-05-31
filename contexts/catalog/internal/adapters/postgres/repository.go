@@ -106,6 +106,57 @@ func (r *PropertyRepository) FindByID(ctx context.Context, id string) (*domain.P
 	return property, nil
 }
 
+func (r *PropertyRepository) FindAll(ctx context.Context) ([]*domain.Property, error) {
+	query := `SELECT id, owner_id, title, description, price, currency, latitude, longitude, address, state FROM properties ORDER BY created_at DESC`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, apperr.NewInternal("error al listar propiedades en postgres", err)
+	}
+	defer rows.Close()
+
+	var properties []*domain.Property
+	for rows.Next() {
+		var (
+			propID, ownerID, title, description, currency, state, address string
+			priceAmount, lat, lng                                         float64
+		)
+		if err := rows.Scan(&propID, &ownerID, &title, &description, &priceAmount, &currency, &lat, &lng, &address, &state); err != nil {
+			return nil, apperr.NewInternal("error al escanear propiedad en postgres", err)
+		}
+
+		price, err := domain.NewPrice(priceAmount, domain.Currency(currency))
+		if err != nil {
+			return nil, err
+		}
+		location, err := domain.NewLocation(lat, lng, address)
+		if err != nil {
+			return nil, err
+		}
+		property, err := domain.NewProperty(propID, ownerID, title, description, price, location)
+		if err != nil {
+			return nil, err
+		}
+
+		switch domain.PropertyState(state) {
+		case domain.StateReserved:
+			_ = property.Reserve()
+		case domain.StateClosed:
+			_ = property.Close()
+		case domain.StateUnderRepair:
+			_ = property.PutUnderRepair()
+		}
+		_ = property.PullEvents()
+
+		properties = append(properties, property)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, apperr.NewInternal("error al iterar propiedades en postgres", err)
+	}
+	return properties, nil
+}
+
 // SaveWithTx permite guardar el agregado y sus eventos de outbox dentro de la misma transacción de base de datos
 func (r *PropertyRepository) SaveWithTx(ctx context.Context, tx *sql.Tx, p *domain.Property) error {
 	query := `

@@ -33,3 +33,13 @@ func (r *PropertyRepository) FindByID(ctx context.Context, id string) (*domain.P
 	}
 	return prop, nil
 }
+
+func (r *PropertyRepository) FindAll(ctx context.Context) ([]*domain.Property, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	properties := make([]*domain.Property, 0, len(r.properties))
+	for _, p := range r.properties {
+		properties = append(properties, p)
+	}
+	return properties, nil
+}

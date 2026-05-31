@@ -10,4 +10,5 @@ import (
 type PropertyRepository interface {
 	Save(ctx context.Context, property *domain.Property) error
 	FindByID(ctx context.Context, id string) (*domain.Property, error)
+	FindAll(ctx context.Context) ([]*domain.Property, error)
 }

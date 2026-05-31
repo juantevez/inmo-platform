@@ -10,15 +10,18 @@ import (
 type PropertyHandler struct {
 	publishUC     *application.PublishPropertyUseCase
 	changeStateUC *application.ChangePropertyStateUseCase
+	listUC        *application.ListPropertiesUseCase
 }
 
 func NewPropertyHandler(
 	publishUC *application.PublishPropertyUseCase,
 	changeStateUC *application.ChangePropertyStateUseCase,
+	listUC *application.ListPropertiesUseCase,
 ) *PropertyHandler {
 	return &PropertyHandler{
 		publishUC:     publishUC,
 		changeStateUC: changeStateUC,
+		listUC:        listUC,
 	}
 }
 
@@ -79,6 +82,18 @@ func (h *PropertyHandler) Reserve(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status": "success", "message": "propiedad reservada"}`))
+}
+
+func (h *PropertyHandler) List(w http.ResponseWriter, r *http.Request) {
+	properties, err := h.listUC.Execute(r.Context())
+	if err != nil {
+		h.errorResponse(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(properties)
 }
 
 // Helper para unificar las respuestas de error usando nuestro Shared Kernel

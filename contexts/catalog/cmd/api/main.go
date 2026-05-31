@@ -73,11 +73,12 @@ func main() {
 		}
 	}()
 
-	// 5. Inicializar Caso de Uso
+	// 5. Inicializar Casos de Uso
 	publishUseCase := application.NewPublishPropertyUseCase(dbPool, propertyRepo)
+	listUseCase := application.NewListPropertiesUseCase(propertyRepo)
 
 	// 6. Inicializar Adaptadores de Entrada (HTTP API)
-	propertyHandler := httpapi.NewPropertyHandler(publishUseCase, nil)
+	propertyHandler := httpapi.NewPropertyHandler(publishUseCase, nil, listUseCase)
 	router := httpapi.NewRouter(propertyHandler)
 
 	// 7. Encender Servidor HTTP (Asignado puerto correcto :8081)
