@@ -14,6 +14,38 @@ type PostgresSettlementRepository struct {
 	db *sql.DB
 }
 
+// 🚀 1. Agregar el método para iniciar la transacción desde la capa de aplicación
+func (r *PostgresSettlementRepository) BeginTx(ctx context.Context) (*sql.Tx, error) {
+	// r.db es tu puntero *sql.DB inyectado en el constructor
+	return r.db.BeginTx(ctx, nil)
+}
+
+// 🚀 2. Agregar el método que ejecuta la actualización del estado DENTRO de la transacción
+func (r *PostgresSettlementRepository) UpdateStatusTx(ctx context.Context, tx *sql.Tx, settlementId string, status string) error {
+	query := `
+		UPDATE settlements 
+		SET status = $1, closed_at = CASE WHEN $1 = 'CLOSED' THEN CURRENT_TIMESTAMP ELSE closed_at END
+		WHERE id = $2;
+	`
+
+	// CRÍTICO: Ejecutamos sobre el 'tx' recibido, NO sobre 'r.db'
+	result, err := tx.ExecContext(ctx, query, status, settlementId)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("no se encontro la liquidacion con ID %s para actualizar", settlementId)
+	}
+
+	return nil
+}
+
 // NewPostgresSettlementRepository instancias el adaptador de persistencia
 func NewPostgresSettlementRepository(db *sql.DB) *PostgresSettlementRepository {
 	return &PostgresSettlementRepository{db: db}

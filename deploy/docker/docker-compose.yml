@@ -171,14 +171,15 @@ services:
 
   finances:
     build:
-      context: ../../contexts/finances
-      dockerfile: Dockerfile
+      context: ../..                  # Sube a la raíz del monorrepo
+      dockerfile: contexts/finances/Dockerfile  # Ruta al Dockerfile nuevo
       network: host
     container_name: inmo-finances
     ports:
       - "8082:8082"
     environment:
       - DATABASE_URL=postgres://inmo_user:inmo_password@inmo-postgres:5432/inmo_catalog_db?sslmode=disable
+      - NATS_URL=nats://inmo-nats:4222
     depends_on:
       - postgres 
     networks:
@@ -186,18 +187,20 @@ services:
 
   maintenance:
     build:
-      context: ../../contexts/maintenance
-      dockerfile: Dockerfile
-      network: host
+      context: ../..
+      dockerfile: contexts/maintenance/Dockerfile
+      network: host      
     container_name: inmo-maintenance
     ports:
       - "8083:8083"
     environment:
-      # Usamos el contenedor inmo-postgres como host dentro de la red interna de Docker
-      - DATABASE_URL=postgres://inmo_user:inmo_password@inmo-postgres:5432/inmo_catalog_db?sslmode=disable
+      - DATABASE_URL=postgres://inmo_user:inmo_password@inmo-postgres:5432/inmo_maintenance_db?sslmode=disable
+      - NATS_URL=nats://inmo-nats:4222
     depends_on:
-      postgres:
-        condition: service_healthy # Espera a que Postgres pase el healthcheck antes de arrancar
+      postgres:                       # 🚀 Cambiado de 'inmo-postgres' a 'postgres'
+        condition: service_healthy
+      nats:                           # 🚀 Cambiado de 'inmo-nats' a 'nats'
+        condition: service_healthy
     networks:
       - inmo-network
 

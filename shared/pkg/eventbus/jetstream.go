@@ -12,7 +12,7 @@ import (
 
 // JetStreamConnection encapsula el cliente nativo de NATS y el motor JetStream v2.
 type JetStreamConnection struct {
-	NC nats.Conn
+	NC *nats.Conn // 🚀 Agregamos el asterisco para que sea puntero
 	JS jetstream.JetStream
 }
 
@@ -36,7 +36,7 @@ func NewJetStreamConnection(url string) (*JetStreamConnection, error) {
 		return nil, fmt.Errorf("error al inicializar JetStream: %w", err)
 	}
 
-	return &JetStreamConnection{NC: *nc, JS: js}, nil
+	return &JetStreamConnection{NC: nc, JS: js}, nil
 }
 
 // EnsureStream garantiza que exista el contenedor persistente de mensajes para un contexto dado.

@@ -2,54 +2,80 @@ package application
 
 import (
 	"context"
-	"errors"
+	"database/sql"
+	"encoding/json"
 	"fmt"
-
-	"inmo.platform/contexts/finances/internal/ports"
+	"time"
 )
 
-type CloseSettlementUseCase struct {
-	repo       ports.SettlementRepository
-	dispatcher ports.EventDispatcher
+// OutboxRepository define lo que la aplicación necesita para persistir eventos de forma atómica
+type OutboxRepository interface {
+	SaveTx(ctx context.Context, tx *sql.Tx, eventName string, payload []byte) error
 }
 
-func NewCloseSettlementUseCase(repo ports.SettlementRepository, dispatcher ports.EventDispatcher) *CloseSettlementUseCase {
+// SettlementRepositoryTx necesita soportar transacciones para que el caso de uso controle el Commit/Rollback
+type SettlementRepositoryTx interface {
+	// Asumo que ya tenés un método para buscar y actualizar, pero necesitamos extraer la Tx
+	BeginTx(ctx context.Context) (*sql.Tx, error)
+	UpdateStatusTx(ctx context.Context, tx *sql.Tx, settlementId string, status string) error
+}
+
+type CloseSettlementUseCase struct {
+	repo       SettlementRepositoryTx
+	outboxRepo OutboxRepository
+}
+
+// Jubilamos el viejo eventDispatcherStub e inyectamos OutboxRepository
+func NewCloseSettlementUseCase(repo SettlementRepositoryTx, outboxRepo OutboxRepository) *CloseSettlementUseCase {
 	return &CloseSettlementUseCase{
 		repo:       repo,
-		dispatcher: dispatcher,
+		outboxRepo: outboxRepo,
 	}
 }
 
-func (uc *CloseSettlementUseCase) Execute(ctx context.Context, settlementID string) error {
-	if settlementID == "" {
-		return errors.New("el ID de la liquidación es obligatorio para proceder al cierre")
-	}
+type SettlementClosedEventPayload struct {
+	SettlementID string    `json:"settlement_id"`
+	ContractID   string    `json:"contract_id"`
+	Period       string    `json:"period"`
+	ClosedAt     time.Time `json:"closed_at"`
+}
 
-	// 1. Recuperar el Agregado
-	settlement, err := uc.repo.FindByID(ctx, settlementID)
+func (uc *CloseSettlementUseCase) Execute(ctx context.Context, settlementId string) error {
+	// 1. Iniciar la transacción de base de datos
+	tx, err := uc.repo.BeginTx(ctx)
 	if err != nil {
-		return fmt.Errorf("error al buscar la liquidación para cierre: %w", err)
+		return fmt.Errorf("error al iniciar transaccion: %w", err)
 	}
-	if settlement == nil {
-		return ErrSettlementNotFound
+	defer tx.Rollback() // Si algo falla o no se confirma con Commit, se deshace todo
+
+	// 2. Ejecutar la lógica de negocio: Cambiar el estado de la liquidación a CLOSED
+	// (Acá podrías tener una búsqueda previa si tu modelo de dominio lo requiere)
+	err = uc.repo.UpdateStatusTx(ctx, tx, settlementId, "CLOSED")
+	if err != nil {
+		return fmt.Errorf("error al actualizar estado de la liquidacion: %w", err)
 	}
 
-	// 2. Ejecutar la regla de negocio del dominio (Cerrar y estampar timestamp de bloqueo)
-	if err := settlement.Close(); err != nil {
-		return fmt.Errorf("error de negocio al intentar cerrar la liquidación: %w", err)
+	// 3. Construir el Payload del evento de dominio
+	eventPayload := SettlementClosedEventPayload{
+		SettlementID: settlementId,
+		ClosedAt:     time.Now(),
+		// Nota: Si necesitás contract_id o period, deberías haber hecho un Select previo con el 'tx'
 	}
 
-	// 3. Persistir el cambio de estado atómicamente
-	if err := uc.repo.Update(ctx, settlement); err != nil {
-		return fmt.Errorf("error al guardar el estado de cierre de la liquidación: %w", err)
+	jsonPayload, err := json.Marshal(eventPayload)
+	if err != nil {
+		return fmt.Errorf("error al serializar evento: %w", err)
 	}
 
-	// 4. Despachar Evento de Dominio al exterior del Bounded Context
-	// Notificamos que se cerró la liquidación para que otros subsistemas emitan los comprobantes o mails
-	if err := uc.dispatcher.PublishSettlementClosed(ctx, settlement.ID()); err != nil {
-		// Loggeamos el error pero no rompemos la transacción del negocio,
-		// o sí, dependiendo de tu política de consistencia eventual (en este caso seguimos)
-		fmt.Printf("[⚠️ Event Error] No se pudo despachar el evento de cierre para %s: %v\n", settlement.ID(), err)
+	// 4. Persistir el evento en la bandeja de salida (Outbox) DENTRO de la misma transacción
+	err = uc.outboxRepo.SaveTx(ctx, tx, "finance.settlement.closed", jsonPayload)
+	if err != nil {
+		return fmt.Errorf("error al guardar evento en outbox: %w", err)
+	}
+
+	// 5. Si todo salió bien, consolidamos la transacción en la BD
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error al hacer commit de la transaccion: %w", err)
 	}
 
 	return nil

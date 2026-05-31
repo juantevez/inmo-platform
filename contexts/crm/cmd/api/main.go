@@ -59,6 +59,10 @@ func main() {
 	// 4. Inicializar Caso de Uso de Aplicación
 	createLeadUC := application.NewCreateAutoLeadUseCase(leadRepo)
 
+	// 4.1. Inicializar y Arrancar el Outbox Worker para CRM 🚀
+	outboxWorker := postgres.NewOutboxWorker(dbPool, natsConn.JS)
+	go outboxWorker.Start(ctx, 15*time.Second) // Escaneo cada 15s para CRM
+
 	// 5. Inicializar Adaptador de Entrada (NATS Subscriber) e iniciar consumo
 	subscriber := nats.NewPropertyEventSubscriber(natsConn.JS, createLeadUC)
 	if err := subscriber.StartConsume(ctx); err != nil {

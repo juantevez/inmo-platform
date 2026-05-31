@@ -3,12 +3,18 @@ FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
-# Copiamos los archivos de configuración de módulos
-COPY go.mod go.sum ./
-RUN go mod download
+# 1. Copiamos el bloque de infraestructura compartida
+COPY shared/ ./shared/
 
-# Copiamos el código fuente del contexto
-COPY . .
+# 2. Copiamos la estructura interna de Mantenimiento
+COPY contexts/maintenance/ ./contexts/maintenance/
+
+# 3. 🚀 Creamos el workspace temporal en caliente
+RUN go work init ./shared ./contexts/maintenance
+
+# 4. Nos paramos dentro del contexto de mantenimiento para descargar y compilar
+WORKDIR /app/contexts/maintenance
+RUN go mod download
 
 # Compilamos el binario optimizado para producción
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o maintenance ./cmd/api/main.go
@@ -18,10 +24,9 @@ FROM alpine:3.19
 
 WORKDIR /app
 
-# Copiamos el binario desde el stage anterior
-COPY --from=builder /app/maintenance .
-# Copiamos la carpeta de migraciones
-COPY --from=builder /app/migrations ./migrations
+# Copiamos el binario y las migraciones
+COPY --from=builder /app/contexts/maintenance/maintenance .
+COPY --from=builder /app/contexts/maintenance/migrations ./migrations
 
 EXPOSE 8083
 

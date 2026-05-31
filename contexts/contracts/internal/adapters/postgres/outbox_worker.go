@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
+	"inmo.platform/shared/pkg/eventbus"
 )
 
 type OutboxEventRow struct {
@@ -17,12 +18,16 @@ type OutboxEventRow struct {
 }
 
 type OutboxWorker struct {
-	db *sql.DB
-	js jetstream.JetStream
+	db        *sql.DB
+	publisher *eventbus.EventPublisher
 }
 
+// NewOutboxWorker inicializa el worker inyectando el publicador genérico de shared
 func NewOutboxWorker(db *sql.DB, js jetstream.JetStream) *OutboxWorker {
-	return &OutboxWorker{db: db, js: js}
+	return &OutboxWorker{
+		db:        db,
+		publisher: eventbus.NewEventPublisher(js),
+	}
 }
 
 func (w *OutboxWorker) Start(ctx context.Context, interval time.Duration) {
@@ -34,6 +39,7 @@ func (w *OutboxWorker) Start(ctx context.Context, interval time.Duration) {
 	for {
 		select {
 		case <-ctx.Done():
+			log.Println("[CONTRACTS OUTBOX] Deteniendo el worker de forma ordenada...")
 			return
 		case <-ticker.C:
 			if err := w.processEvents(ctx); err != nil {
@@ -44,7 +50,6 @@ func (w *OutboxWorker) Start(ctx context.Context, interval time.Duration) {
 }
 
 func (w *OutboxWorker) processEvents(ctx context.Context) error {
-	// Log 1: Saber si el ticker efectivamente entra a la función
 	log.Println("[CONTRACTS OUTBOX] Entrando a processEvents... Ejecutando Query...")
 
 	tx, err := w.db.BeginTx(ctx, nil)
@@ -53,14 +58,15 @@ func (w *OutboxWorker) processEvents(ctx context.Context) error {
 	}
 	defer tx.Rollback()
 
+	// Consulta optimizada con FOR UPDATE SKIP LOCKED
 	query := `
-		SELECT id, event_name, payload 
-		FROM contracts_outbox_events 
-		WHERE status = 'PENDING' 
-		ORDER BY created_at ASC 
-		LIMIT 10 
-		FOR UPDATE SKIP LOCKED;
-	`
+        SELECT id, event_name, payload 
+        FROM contracts_outbox_events 
+        WHERE status = 'PENDING' 
+        ORDER BY created_at ASC 
+        LIMIT 10 
+        FOR UPDATE SKIP LOCKED;
+    `
 
 	rows, err := tx.QueryContext(ctx, query)
 	if err != nil {
@@ -77,7 +83,6 @@ func (w *OutboxWorker) processEvents(ctx context.Context) error {
 		events = append(events, ev)
 	}
 
-	// Log 2: Ver cuántos eventos leyó realmente del slice después del append
 	log.Printf("[CONTRACTS OUTBOX] Cantidad de eventos mapeados en memoria: %d\n", len(events))
 
 	if len(events) == 0 {
@@ -85,13 +90,13 @@ func (w *OutboxWorker) processEvents(ctx context.Context) error {
 	}
 
 	for _, ev := range events {
-		log.Printf("[CONTRACTS OUTBOX] Intentando publicar en NATS el evento: %s (ID: %s)\n", ev.EventName, ev.ID)
+		log.Printf("[CONTRACTS OUTBOX] Delegando publicación a infraestructura compartida: %s (ID: %s)\n", ev.EventName, ev.ID)
 
-		_, err := w.js.Publish(ctx, ev.EventName, ev.Payload)
+		// 🚀 Publicamos usando el componente centralizado de shared
+		err := w.publisher.Publish(ctx, ev.EventName, ev.Payload)
 		if err != nil {
-			// Log 3: Si NATS lo rechaza, acá salta el motivo exacto
-			log.Printf("[CONTRACTS OUTBOX ERROR] NATS rechazó la publicación de %s: %v\n", ev.ID, err)
-			continue
+			log.Printf("[CONTRACTS OUTBOX ERROR] Infraestructura rechazó la publicación de %s: %v\n", ev.ID, err)
+			continue // Si un evento falla, continuamos con el siguiente para no trabar el lote completo
 		}
 
 		log.Printf("[CONTRACTS OUTBOX] Publicado con éxito en NATS. Actualizando estado a PROCESSED...\n")
