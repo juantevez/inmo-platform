@@ -82,8 +82,10 @@ func (uc *LoginSSOGoogleUseCase) Execute(ctx context.Context, cmd LoginSSOGoogle
 		// ◄ CORREGIDO: Quitamos el '*' porque LinkProvider ahora recibe el puntero directo
 		_ = user.LinkProvider(googleProvider)
 
+		// Definimos el rol por defecto para los registros automáticos por SSO
+		initialRoles := []string{"INQUILINO"}
 		// Guardamos de forma atómica en Postgres
-		err = uc.userRepo.Save(ctx, user, googleProvider)
+		err = uc.userRepo.Save(ctx, user, googleProvider, initialRoles)
 		if err != nil {
 			return nil, fmt.Errorf("error al registrar usuario de Google en BD: %w", err)
 		}
@@ -151,7 +153,9 @@ func (uc *LoginSSOGoogleUseCase) Execute(ctx context.Context, cmd LoginSSOGoogle
 
 // issueTokens es una función auxiliar interna para evitar duplicar el bloque de generación de JWT y eventos
 func (uc *LoginSSOGoogleUseCase) issueTokens(ctx context.Context, userID string, mode string, cmd LoginSSOGoogleCommand) (*LoginPasswordResponse, error) {
-	accessToken, err := uc.tokenService.GenerateAccessToken(userID)
+	// Definimos el rol por defecto para los registros automáticos por SSO
+	initialRoles := []string{"INQUILINO"}
+	accessToken, err := uc.tokenService.GenerateAccessToken(userID, initialRoles)
 	if err != nil {
 		return nil, err
 	}

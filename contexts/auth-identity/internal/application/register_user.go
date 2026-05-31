@@ -82,7 +82,9 @@ func (uc *RegisterUserUseCase) Execute(ctx context.Context, cmd RegisterUserComm
 	verificationToken := domain.NewEmailVerificationToken(tokenValue, user.ID())
 
 	// 6. Persistencia Atómica: Guardamos el usuario, su método de auth y el token
-	err = uc.userRepo.Save(ctx, user, emailProvider)
+	// Definimos el rol por defecto para los registros automáticos por SSO
+	initialRoles := []string{"INQUILINO"}
+	err = uc.userRepo.Save(ctx, user, emailProvider, initialRoles)
 	if err != nil {
 		return nil, fmt.Errorf("error al guardar el usuario en la base de datos: %w", err)
 	}

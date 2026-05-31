@@ -18,13 +18,13 @@ func NewPostgresUserRepository(db *DB) *PostgresUserRepository {
 	return &PostgresUserRepository{db: db}
 }
 
-// Save inserta un usuario nuevo junto con su proveedor inicial (EMAIL o SSO) en una transacción atómica (UC-01/04/05)
-func (r *PostgresUserRepository) Save(ctx context.Context, user *domain.User, provider *domain.IdentityProvider) error {
+// Save inserta un usuario nuevo, su proveedor y sus roles iniciales en una transacción atómica (UC-01/04/05)
+func (r *PostgresUserRepository) Save(ctx context.Context, user *domain.User, provider *domain.IdentityProvider, roles []string) error {
 	tx, err := r.db.Pool.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("error al iniciar transaccion de guardado: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() // Si algo falla antes del Commit, limpia todo automáticamente
 
 	// 1. Insertar el usuario núcleo
 	userQuery := `INSERT INTO users (id, email, status, phone, phone_verified_at, created_at) 
@@ -42,12 +42,12 @@ func (r *PostgresUserRepository) Save(ctx context.Context, user *domain.User, pr
 		return fmt.Errorf("falló inserción de usuario núcleo: %w", err)
 	}
 
-	// 2. Manejar el password hash según el proveedor (Asumiendo que PasswordHash() expone el string en tu dominio)
+	// 2. Manejar el password hash según el proveedor
 	var pwdHash sql.NullString
 	if provider.Name() == domain.ProviderEmail {
-		pwdHash = sql.NullString{String: provider.PasswordHash(), Valid: true} // ◄ CORREGIDO: Iba PasswordHash, no el Email!
+		pwdHash = sql.NullString{String: provider.PasswordHash(), Valid: true}
 	} else {
-		pwdHash = sql.NullString{Valid: false} // NULL si entra por SSO puro (Google/Meta)
+		pwdHash = sql.NullString{Valid: false}
 	}
 
 	// 3. Insertar el proveedor inicial
@@ -63,6 +63,20 @@ func (r *PostgresUserRepository) Save(ctx context.Context, user *domain.User, pr
 	)
 	if err != nil {
 		return fmt.Errorf("falló inserción de identity provider inicial: %w", err)
+	}
+
+	// 🚀 4. NUEVO: Insertar los roles iniciales del usuario asociados en la tabla asociativa
+	if len(roles) == 0 {
+		// Estrategia preventiva: Si por alguna razón no viene ningún rol, le asignamos uno por defecto
+		roles = []string{"INQUILINO"}
+	}
+
+	roleQuery := `INSERT INTO user_roles (user_id, role, created_at) VALUES ($1, $2, CURRENT_TIMESTAMP)`
+	for _, role := range roles {
+		_, err = tx.ExecContext(ctx, roleQuery, user.ID(), role)
+		if err != nil {
+			return fmt.Errorf("falló inserción del rol '%s' para el usuario: %w", role, err)
+		}
 	}
 
 	return tx.Commit()
@@ -122,6 +136,27 @@ func (r *PostgresUserRepository) FindByEmail(ctx context.Context, email string) 
 	}
 
 	return r.reconstructUser(id, uEmail, status, phone, phoneVerifiedAt, createdAt), nil
+}
+
+// Dentro de internal/adapters/postgres/user_repository.go
+
+func (r *PostgresUserRepository) FindRolesByUserID(ctx context.Context, userID string) ([]string, error) {
+	query := `SELECT role FROM user_roles WHERE user_id = $1`
+	rows, err := r.db.Pool.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("error al consultar roles: %w", err)
+	}
+	defer rows.Close()
+
+	var roles []string
+	for rows.Next() {
+		var role string
+		if err := rows.Scan(&role); err != nil {
+			return nil, err
+		}
+		roles = append(roles, role)
+	}
+	return roles, nil
 }
 
 // FindProvider busca un método de login específico asociado a un usuario (UC-03)

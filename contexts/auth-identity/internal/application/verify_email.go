@@ -90,8 +90,10 @@ func (uc *VerifyEmailUseCase) Execute(ctx context.Context, cmd VerifyEmailComman
 		return nil, fmt.Errorf("error al actualizar el token de verificación: %w", err)
 	}
 
+	// Definimos el rol por defecto para los registros automáticos por SSO
+	initialRoles := []string{"INQUILINO"}
 	// 7. Emitir los tokens de sesión directa para comodidad del usuario (UX)
-	accessToken, err := uc.tokenService.GenerateAccessToken(user.ID())
+	accessToken, err := uc.tokenService.GenerateAccessToken(user.ID(), initialRoles)
 	if err != nil {
 		return nil, fmt.Errorf("error al generar access token post-verificación: %w", err)
 	}

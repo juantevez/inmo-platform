@@ -76,7 +76,6 @@ func main() {
 	loginMetaUC := application.NewLoginSSOMetaUseCase(userRepo, tokenRepo, metaAdapter, tokenService, eventPublisher, uuidGenerator)
 
 	// 7. Conectar la capa HTTP entubando los Casos de Uso al enrutador nativo
-	//authHandler := httpapi.NewAuthHandler(registerUC, loginPassUC, verifyEmailUC, loginGoogleUC)
 	authHandler := httpapi.NewAuthHandler(registerUC, loginPassUC, verifyEmailUC, loginGoogleUC, loginMetaUC)
 	router := httpapi.NewRouter(authHandler)
 
@@ -106,7 +105,8 @@ func getEnv(key, fallback string) string {
 
 type stubTokenService struct{}
 
-func (s *stubTokenService) GenerateAccessToken(userID string) (string, error) {
+// 🚀 CORREGIDO: Ahora acepta el slice de roles exigido por el puerto interno de Application
+func (s *stubTokenService) GenerateAccessToken(userID string, roles []string) (string, error) {
 	// Simula la firma de un JWT corto (15 min). En producción usarás "github.com/golang-jwt/jwt/v5"
 	return "jwt.mock.access_token.for_user_" + userID, nil
 }
@@ -130,12 +130,10 @@ func (s *stubEventPublisher) PublishEvent(ctx context.Context, event ports.AuthE
 type stubIdentityService struct{}
 
 func (s *stubIdentityService) VerifyGoogleCode(ctx context.Context, code string) (*ports.SSOResult, error) {
-	// 📢 NUESTRO ECHO/LOG PARA DEBUGGEAR EN LA CONSOLA DE DOCKER:
 	log.Println("==================================================")
 	log.Printf("📥 ¡ENTRANDO AL STUB DE GOOGLE! El 'code' recibido es: %s\n", code)
 	log.Println("==================================================")
 
-	// Forzamos el retorno exitoso simulado
 	return &ports.SSOResult{
 		ProviderUserID: "google-uid-mock-123456",
 		Email:          "diego.maradona@example.com",

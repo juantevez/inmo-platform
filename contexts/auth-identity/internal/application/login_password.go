@@ -32,7 +32,8 @@ type LoginPasswordResponse struct {
 
 // TokenService define un puerto interno (o que puede ir a ports/) para la firma de JWTs
 type TokenService interface {
-	GenerateAccessToken(userID string) (string, error)
+	// 🚀 Ahora recibe el slice de roles del usuario para inyectarlos en el JWT
+	GenerateAccessToken(userID string, roles []string) (string, error)
 	GenerateRefreshToken() (string, error)
 }
 
@@ -108,8 +109,15 @@ func (uc *LoginPasswordUseCase) Execute(ctx context.Context, cmd LoginPasswordCo
 	// 6. Éxito de autenticación: Limpiamos los intentos fallidos en Redis de forma inmediata
 	_ = uc.tokenRepo.ClearLoginAttempts(ctx, rateLimitKey)
 
+	// 🚀 6b. NUEVO: Ir a buscar los roles que tiene asignados el usuario en la tabla asociativa
+	roles, err := uc.userRepo.FindRolesByUserID(ctx, user.ID())
+	if err != nil {
+		return nil, fmt.Errorf("error al recuperar los roles del usuario: %w", err)
+	}
+
 	// 7. Emitir los tokens (Access Token corto y Refresh Token largo)
-	accessToken, err := uc.tokenService.GenerateAccessToken(user.ID())
+	// 🚀 Pasamos los roles recuperados para que queden estampados en el JWT
+	accessToken, err := uc.tokenService.GenerateAccessToken(user.ID(), roles)
 	if err != nil {
 		return nil, fmt.Errorf("error al generar access token: %w", err)
 	}
@@ -135,6 +143,7 @@ func (uc *LoginPasswordUseCase) Execute(ctx context.Context, cmd LoginPasswordCo
 			"ip":         cmd.ClientIP,
 			"user_agent": cmd.UserAgent,
 			"provider":   "EMAIL",
+			"roles":      roles, // 🚀 Sumamos los roles al evento para trazabilidad
 		},
 	}
 	_ = uc.eventPublisher.PublishEvent(ctx, authEvent)

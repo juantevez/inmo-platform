@@ -88,8 +88,11 @@ func (uc *LoginSSOMetaUseCase) Execute(ctx context.Context, cmd LoginSSOMetaComm
 		// ◄ CORREGIDO: Quitamos el '*' porque LinkProvider ahora recibe el puntero directo
 		_ = user.LinkProvider(metaProvider)
 
+		// Definimos el rol por defecto para los registros automáticos por SSO
+		initialRoles := []string{"INQUILINO"}
+
 		// Guardamos transaccionalmente en Postgres
-		err = uc.userRepo.Save(ctx, user, metaProvider)
+		err = uc.userRepo.Save(ctx, user, metaProvider, initialRoles)
 		if err != nil {
 			return nil, fmt.Errorf("error al registrar usuario de Meta en BD: %w", err)
 		}
@@ -152,7 +155,7 @@ func (uc *LoginSSOMetaUseCase) Execute(ctx context.Context, cmd LoginSSOMetaComm
 
 // issueMetaTokens encapsula la generación de la sesión de Meta y los logs en NATS
 func (uc *LoginSSOMetaUseCase) issueMetaTokens(ctx context.Context, userID string, mode string, cmd LoginSSOMetaCommand) (*LoginPasswordResponse, error) {
-	accessToken, err := uc.tokenService.GenerateAccessToken(userID)
+	accessToken, err := uc.tokenService.GenerateAccessToken(userID, nil)
 	if err != nil {
 		return nil, err
 	}

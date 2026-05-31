@@ -48,7 +48,10 @@ func (uc *RefreshTokenUseCase) Execute(ctx context.Context, cmd RefreshTokenComm
 	_ = uc.tokenRepo.DeleteRefreshToken(ctx, cmd.RefreshToken)
 
 	// 3. Emitir el nuevo par de tokens (UC-09 Pasos 3 y 4)
-	newAccessToken, err := uc.tokenService.GenerateAccessToken(userID)
+	// Definimos el rol por defecto para los registros automáticos por SSO
+	initialRoles := []string{"INQUILINO"}
+
+	newAccessToken, err := uc.tokenService.GenerateAccessToken(userID, initialRoles)
 	if err != nil {
 		return nil, fmt.Errorf("error al rotar el access token: %w", err)
 	}
