@@ -28,6 +28,11 @@ type LocationDTO struct {
 	Address   string  `json:"address"`
 }
 
+type ListResponse struct {
+	Properties []PropertyDTO `json:"properties"`
+	Total      int           `json:"total"`
+}
+
 type ListPropertiesUseCase struct {
 	repo ports.PropertyRepository
 }
@@ -36,17 +41,17 @@ func NewListPropertiesUseCase(repo ports.PropertyRepository) *ListPropertiesUseC
 	return &ListPropertiesUseCase{repo: repo}
 }
 
-func (uc *ListPropertiesUseCase) Execute(ctx context.Context) ([]PropertyDTO, error) {
-	properties, err := uc.repo.FindAll(ctx)
+func (uc *ListPropertiesUseCase) Execute(ctx context.Context, filters ports.ListFilters) (ListResponse, error) {
+	properties, total, err := uc.repo.FindAll(ctx, filters)
 	if err != nil {
-		return nil, err
+		return ListResponse{}, err
 	}
 
 	dtos := make([]PropertyDTO, 0, len(properties))
 	for _, p := range properties {
 		dtos = append(dtos, toPropertyDTO(p))
 	}
-	return dtos, nil
+	return ListResponse{Properties: dtos, Total: total}, nil
 }
 
 func toPropertyDTO(p *domain.Property) PropertyDTO {

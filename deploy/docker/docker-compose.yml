@@ -72,6 +72,37 @@ services:
     networks:
       - inmo-network
 
+# --- API Gateway: punto de acceso a los modulos ---
+  inmo-api-gateway:
+    container_name: inmo-api-gateway
+    build:
+      context: ../../
+      dockerfile: contexts/api-gateway/Dockerfile
+      network: host
+    ports:
+      - "8000:8000"
+    environment:
+      - GATEWAY_PORT=:8000
+      - CATALOG_SERVICE_URL=http://inmo-catalog:8081
+      - AUTH_SERVICE_URL=http://inmo-auth-identity:8080
+      - MAINTENANCE_SERVICE_URL=http://inmo-maintenance:8083
+      - FINANCES_SERVICE_URL=http://inmo-finances:8082
+      - CONTRACTS_SERVICE_URL=http://inmo-contracts:8085
+      - JWT_SECRET=tu_super_secreto_local
+    depends_on:
+      catalog:
+        condition: service_started
+      auth-identity:
+        condition: service_started
+      maintenance:
+        condition: service_started
+      finances:
+        condition: service_started
+      contracts:
+        condition: service_started
+    networks:
+      - inmo-network
+
   # --- MICROSERVICE: Auth & Identity (Tu módulo en Go) ---
   auth-identity:
     build:

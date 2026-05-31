@@ -1,6 +1,7 @@
 go 1.25.0
 
 use (
+	./contexts/api-gateway
 	./contexts/auth-identity
 	./contexts/catalog
 	./contexts/contracts

@@ -3,6 +3,7 @@ package inmemory
 import (
 	"context"
 	"inmo.platform/contexts/catalog/internal/domain"
+	"inmo.platform/contexts/catalog/internal/ports"
 	"sync"
 )
 
@@ -34,12 +35,35 @@ func (r *PropertyRepository) FindByID(ctx context.Context, id string) (*domain.P
 	return prop, nil
 }
 
-func (r *PropertyRepository) FindAll(ctx context.Context) ([]*domain.Property, error) {
+func (r *PropertyRepository) FindAll(ctx context.Context, f ports.ListFilters) ([]*domain.Property, int, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	properties := make([]*domain.Property, 0, len(r.properties))
+
+	var filtered []*domain.Property
 	for _, p := range r.properties {
-		properties = append(properties, p)
+		if f.State != "" && string(p.State()) != f.State {
+			continue
+		}
+		if f.MinPrice > 0 && p.Price().Amount() < f.MinPrice {
+			continue
+		}
+		if f.MaxPrice > 0 && p.Price().Amount() > f.MaxPrice {
+			continue
+		}
+		filtered = append(filtered, p)
 	}
-	return properties, nil
+
+	total := len(filtered)
+
+	if f.Offset > 0 {
+		if f.Offset >= len(filtered) {
+			return []*domain.Property{}, total, nil
+		}
+		filtered = filtered[f.Offset:]
+	}
+	if f.Limit > 0 && len(filtered) > f.Limit {
+		filtered = filtered[:f.Limit]
+	}
+
+	return filtered, total, nil
 }

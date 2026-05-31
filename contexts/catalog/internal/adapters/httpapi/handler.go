@@ -3,8 +3,10 @@ package httpapi
 import (
 	"encoding/json"
 	"inmo.platform/contexts/catalog/internal/application"
+	"inmo.platform/contexts/catalog/internal/ports"
 	"inmo.platform/shared/pkg/apperr"
 	"net/http"
+	"strconv"
 )
 
 type PropertyHandler struct {
@@ -85,7 +87,21 @@ func (h *PropertyHandler) Reserve(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PropertyHandler) List(w http.ResponseWriter, r *http.Request) {
-	properties, err := h.listUC.Execute(r.Context())
+	q := r.URL.Query()
+
+	filters := ports.ListFilters{
+		State:  q.Get("status"),
+		Limit:  parseIntQuery(q.Get("limit"), 50),
+		Offset: parseIntQuery(q.Get("offset"), 0),
+	}
+	if v := q.Get("min_price"); v != "" {
+		filters.MinPrice, _ = strconv.ParseFloat(v, 64)
+	}
+	if v := q.Get("max_price"); v != "" {
+		filters.MaxPrice, _ = strconv.ParseFloat(v, 64)
+	}
+
+	response, err := h.listUC.Execute(r.Context(), filters)
 	if err != nil {
 		h.errorResponse(w, err)
 		return
@@ -93,7 +109,18 @@ func (h *PropertyHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(properties)
+	_ = json.NewEncoder(w).Encode(response)
+}
+
+func parseIntQuery(v string, def int) int {
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 0 {
+		return def
+	}
+	return n
 }
 
 // Helper para unificar las respuestas de error usando nuestro Shared Kernel

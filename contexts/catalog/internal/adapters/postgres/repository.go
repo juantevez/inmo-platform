@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"inmo.platform/contexts/catalog/internal/domain"
+	"inmo.platform/contexts/catalog/internal/ports"
 	"inmo.platform/shared/pkg/apperr"
+	"strings"
 	"time"
 )
 
@@ -106,12 +108,31 @@ func (r *PropertyRepository) FindByID(ctx context.Context, id string) (*domain.P
 	return property, nil
 }
 
-func (r *PropertyRepository) FindAll(ctx context.Context) ([]*domain.Property, error) {
-	query := `SELECT id, owner_id, title, description, price, currency, latitude, longitude, address, state FROM properties ORDER BY created_at DESC`
+func (r *PropertyRepository) FindAll(ctx context.Context, f ports.ListFilters) ([]*domain.Property, int, error) {
+	where, args := buildListWhere(f)
 
-	rows, err := r.db.QueryContext(ctx, query)
+	// Total antes de paginar
+	var total int
+	countQuery := "SELECT COUNT(*) FROM properties" + where
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, apperr.NewInternal("error al contar propiedades en postgres", err)
+	}
+
+	// Página de resultados
+	limit := f.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	n := len(args) + 1
+	dataQuery := fmt.Sprintf(
+		"SELECT id, owner_id, title, description, price, currency, latitude, longitude, address, state FROM properties%s ORDER BY created_at DESC LIMIT $%d OFFSET $%d",
+		where, n, n+1,
+	)
+	args = append(args, limit, f.Offset)
+
+	rows, err := r.db.QueryContext(ctx, dataQuery, args...)
 	if err != nil {
-		return nil, apperr.NewInternal("error al listar propiedades en postgres", err)
+		return nil, 0, apperr.NewInternal("error al listar propiedades en postgres", err)
 	}
 	defer rows.Close()
 
@@ -122,20 +143,20 @@ func (r *PropertyRepository) FindAll(ctx context.Context) ([]*domain.Property, e
 			priceAmount, lat, lng                                         float64
 		)
 		if err := rows.Scan(&propID, &ownerID, &title, &description, &priceAmount, &currency, &lat, &lng, &address, &state); err != nil {
-			return nil, apperr.NewInternal("error al escanear propiedad en postgres", err)
+			return nil, 0, apperr.NewInternal("error al escanear propiedad en postgres", err)
 		}
 
 		price, err := domain.NewPrice(priceAmount, domain.Currency(currency))
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		location, err := domain.NewLocation(lat, lng, address)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		property, err := domain.NewProperty(propID, ownerID, title, description, price, location)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		switch domain.PropertyState(state) {
@@ -152,9 +173,36 @@ func (r *PropertyRepository) FindAll(ctx context.Context) ([]*domain.Property, e
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, apperr.NewInternal("error al iterar propiedades en postgres", err)
+		return nil, 0, apperr.NewInternal("error al iterar propiedades en postgres", err)
 	}
-	return properties, nil
+	return properties, total, nil
+}
+
+func buildListWhere(f ports.ListFilters) (string, []interface{}) {
+	var clauses []string
+	var args []interface{}
+	n := 1
+
+	if f.State != "" {
+		clauses = append(clauses, fmt.Sprintf("state = $%d", n))
+		args = append(args, f.State)
+		n++
+	}
+	if f.MinPrice > 0 {
+		clauses = append(clauses, fmt.Sprintf("price >= $%d", n))
+		args = append(args, f.MinPrice)
+		n++
+	}
+	if f.MaxPrice > 0 {
+		clauses = append(clauses, fmt.Sprintf("price <= $%d", n))
+		args = append(args, f.MaxPrice)
+		n++
+	}
+
+	if len(clauses) == 0 {
+		return "", args
+	}
+	return " WHERE " + strings.Join(clauses, " AND "), args
 }
 
 // SaveWithTx permite guardar el agregado y sus eventos de outbox dentro de la misma transacción de base de datos
