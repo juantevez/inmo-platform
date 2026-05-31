@@ -103,6 +103,54 @@ services:
     networks:
       - inmo-network
 
+  catalog:
+    build:
+      context: ../../contexts/catalog
+      dockerfile: Dockerfile
+      network: host
+    container_name: inmo-catalog
+    ports:
+      - "8081:8081"
+    environment:
+      - DATABASE_URL=postgres://inmo_user:inmo_password@inmo-postgres:5432/inmo_catalog_db?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - inmo-network
+
+  crm:
+    build:
+      context: ../../contexts/crm
+      dockerfile: Dockerfile
+      network: host
+    container_name: inmo-crm
+    ports:
+      - "8084:8084"
+    environment:
+      - DATABASE_URL=postgres://inmo_user:inmo_password@inmo-postgres:5432/inmo_catalog_db?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - inmo-network
+
+  contracts:
+    build:
+      context: ../../contexts/contracts
+      dockerfile: Dockerfile
+      network: host
+    container_name: inmo-contracts
+    ports:
+      - "8085:8085"
+    environment:
+      - DATABASE_URL=postgres://inmo_user:inmo_password@inmo-postgres:5432/inmo_catalog_db?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - inmo-network
+
   finances:
     build:
       context: ../../contexts/finances
@@ -114,9 +162,26 @@ services:
     environment:
       - DATABASE_URL=postgres://inmo_user:inmo_password@inmo-postgres:5432/inmo_catalog_db?sslmode=disable
     depends_on:
-      - postgres # Espera a que la base de datos esté arriba para iniciar
+      - postgres 
     networks:
-      - inmo-network # Asegurate de usar la misma red que tus otros servicios
+      - inmo-network 
+
+  maintenance:
+    build:
+      context: ../../contexts/maintenance
+      dockerfile: Dockerfile
+      network: host
+    container_name: inmo-maintenance
+    ports:
+      - "8083:8083"
+    environment:
+      # Usamos el contenedor inmo-postgres como host dentro de la red interna de Docker
+      - DATABASE_URL=postgres://inmo_user:inmo_password@inmo-postgres:5432/inmo_catalog_db?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy # Espera a que Postgres pase el healthcheck antes de arrancar
+    networks:
+      - inmo-network
 
 volumes:
   postgres_data:
