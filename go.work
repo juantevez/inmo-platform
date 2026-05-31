@@ -6,5 +6,6 @@ use (
 	./contexts/contracts
 	./contexts/crm
 	./contexts/finances
+	./contexts/maintenance
 	./shared
 )

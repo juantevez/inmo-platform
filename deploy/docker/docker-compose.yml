@@ -105,14 +105,20 @@ services:
 
   catalog:
     build:
-      context: ../../contexts/catalog
-      dockerfile: Dockerfile
+      context: ../../
+      dockerfile: contexts/catalog/Dockerfile
       network: host
     container_name: inmo-catalog
     ports:
       - "8081:8081"
     environment:
       - DATABASE_URL=postgres://inmo_user:inmo_password@inmo-postgres:5432/inmo_catalog_db?sslmode=disable
+      - NATS_URL=nats://inmo-nats:4222 
+      - DB_HOST=inmo-postgres
+      - DB_PORT=5432
+      - DB_USER=inmo_user
+      - DB_PASSWORD=inmo_password
+      - DB_NAME=inmo_catalog_db
     depends_on:
       postgres:
         condition: service_healthy
@@ -121,14 +127,20 @@ services:
 
   crm:
     build:
-      context: ../../contexts/crm
-      dockerfile: Dockerfile
+      context: ../../
+      dockerfile: contexts/crm/Dockerfile
       network: host
     container_name: inmo-crm
     ports:
       - "8084:8084"
     environment:
       - DATABASE_URL=postgres://inmo_user:inmo_password@inmo-postgres:5432/inmo_catalog_db?sslmode=disable
+      - NATS_URL=nats://inmo-nats:4222 
+      - DB_HOST=inmo-postgres
+      - DB_PORT=5432
+      - DB_USER=inmo_user
+      - DB_PASSWORD=inmo_password
+      - DB_NAME=inmo_catalog_db
     depends_on:
       postgres:
         condition: service_healthy
@@ -137,14 +149,20 @@ services:
 
   contracts:
     build:
-      context: ../../contexts/contracts
-      dockerfile: Dockerfile
+      context: ../../
+      dockerfile: contexts/contracts/Dockerfile
       network: host
     container_name: inmo-contracts
     ports:
       - "8085:8085"
     environment:
       - DATABASE_URL=postgres://inmo_user:inmo_password@inmo-postgres:5432/inmo_catalog_db?sslmode=disable
+      - NATS_URL=nats://inmo-nats:4222 
+      - DB_HOST=inmo-postgres
+      - DB_PORT=5432
+      - DB_USER=inmo_user
+      - DB_PASSWORD=inmo_password
+      - DB_NAME=inmo_catalog_db
     depends_on:
       postgres:
         condition: service_healthy

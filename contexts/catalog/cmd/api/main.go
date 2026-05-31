@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"inmo.platform/contexts/catalog/internal/adapters/httpapi"
@@ -19,9 +20,20 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// 🚀 CAPTURA DINÁMICA DE ENTORNO
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = "postgres://inmo_user:inmo_password@localhost:5432/inmo_catalog_db?sslmode=disable"
+	}
+
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
+		natsURL = "nats://localhost:4222"
+	}
+
 	// 1. Configurar y Conectar Pool de PostgreSQL
 	pgConfig := pg.Config{
-		URL:          "postgres://inmo_user:inmo_password@localhost:5432/inmo_catalog_db?sslmode=disable",
+		URL:          dbURL,
 		MaxOpenConns: 25,
 		MaxIdleConns: 5,
 		MaxIdleTime:  5 * time.Minute,
@@ -33,7 +45,6 @@ func main() {
 	defer dbPool.Close()
 
 	// 2. Configurar y Conectar Broker NATS JetStream
-	natsURL := "nats://localhost:4222"
 	natsConn, err := eventbus.NewJetStreamConnection(natsURL)
 	if err != nil {
 		log.Fatalf("No se pudo conectar a NATS JetStream: %v", err)
@@ -61,7 +72,6 @@ func main() {
 			log.Printf("[CATALOG ERROR] Error crítico en el suscriptor de contratos: %v\n", err)
 		}
 	}()
-	// =========================================================================
 
 	// 5. Inicializar Caso de Uso
 	publishUseCase := application.NewPublishPropertyUseCase(dbPool, propertyRepo)
@@ -70,8 +80,8 @@ func main() {
 	propertyHandler := httpapi.NewPropertyHandler(publishUseCase, nil)
 	router := httpapi.NewRouter(propertyHandler)
 
-	// 7. Encender Servidor HTTP
-	serverAddr := ":8080"
+	// 7. Encender Servidor HTTP (Asignado puerto correcto :8081)
+	serverAddr := ":8081"
 	server := &http.Server{
 		Addr:         serverAddr,
 		Handler:      router,
@@ -79,7 +89,7 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 	}
 
-	log.Printf("Servidor API Catálogo corriendo en http://localhost%s\n", serverAddr)
+	log.Printf("Servidor API Catálogo corriendo en el puerto %s\n", serverAddr)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Error crítico en el servidor HTTP: %v", err)
 	}

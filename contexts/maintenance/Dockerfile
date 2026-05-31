@@ -11,7 +11,7 @@ RUN go mod download
 COPY . .
 
 # Compilamos el binario optimizado para producción
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o finances ./cmd/api/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o maintenance ./cmd/api/main.go
 
 # --- Stage 2: Imagen de Ejecución ---
 FROM alpine:3.19
@@ -19,10 +19,10 @@ FROM alpine:3.19
 WORKDIR /app
 
 # Copiamos el binario desde el stage anterior
-COPY --from=builder /app/finances .
+COPY --from=builder /app/maintenance .
 # Copiamos la carpeta de migraciones
 COPY --from=builder /app/migrations ./migrations
 
-EXPOSE 8082
+EXPOSE 8083
 
-CMD ["./finances"]
+CMD ["./maintenance"]

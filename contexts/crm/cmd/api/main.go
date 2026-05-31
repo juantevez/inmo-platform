@@ -2,16 +2,17 @@ package main
 
 import (
 	"context"
-	"inmo.platform/contexts/crm/internal/adapters/nats"
-	"inmo.platform/contexts/crm/internal/adapters/postgres"
-	"inmo.platform/contexts/crm/internal/application"
-	"inmo.platform/shared/pkg/eventbus"
-	"inmo.platform/shared/pkg/pg"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"inmo.platform/contexts/crm/internal/adapters/nats"
+	"inmo.platform/contexts/crm/internal/adapters/postgres"
+	"inmo.platform/contexts/crm/internal/application"
+	"inmo.platform/shared/pkg/eventbus"
+	"inmo.platform/shared/pkg/pg"
 )
 
 func main() {
@@ -19,9 +20,20 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// 🚀 CAPTURA DINÁMICA DE ENTORNO
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = "postgres://inmo_user:inmo_password@localhost:5432/inmo_catalog_db?sslmode=disable"
+	}
+
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
+		natsURL = "nats://localhost:4222"
+	}
+
 	// 1. Configurar y Conectar Pool de PostgreSQL para CRM
 	pgConfig := pg.Config{
-		URL:          "postgres://inmo_user:inmo_password@localhost:5432/inmo_catalog_db?sslmode=disable",
+		URL:          dbURL,
 		MaxOpenConns: 10,
 		MaxIdleConns: 2,
 		MaxIdleTime:  5 * time.Minute,
@@ -34,7 +46,6 @@ func main() {
 	log.Println("CRM: Conexión exitosa a PostgreSQL establecida.")
 
 	// 2. Inicializar Conexión al Broker NATS JetStream
-	natsURL := "nats://localhost:4222"
 	natsConn, err := eventbus.NewJetStreamConnection(natsURL)
 	if err != nil {
 		log.Fatalf("CRM no se pudo conectar a NATS: %v", err)
