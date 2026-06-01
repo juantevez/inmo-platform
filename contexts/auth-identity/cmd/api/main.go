@@ -18,7 +18,7 @@ import (
 	"inmo.platform/contexts/auth-identity/internal/application"
 	"inmo.platform/contexts/auth-identity/internal/ports"
 
-	// Driver oficial de Redis y Postgres estándar
+	jwtlib "github.com/golang-jwt/jwt/v5"
 	_ "github.com/lib/pq"
 	redisClient "github.com/redis/go-redis/v9"
 )
@@ -62,7 +62,8 @@ func main() {
 		return fmt.Sprintf("%x-%x-%x-%x-%x", bytes[0:4], bytes[4:6], bytes[6:8], bytes[8:10], bytes[10:])
 	}
 
-	tokenService := &stubTokenService{}
+	jwtSecret := getEnv("JWT_SECRET", "dev_secret_local")
+	tokenService := &jwtTokenService{secret: []byte(jwtSecret)}
 	eventPublisher := &stubEventPublisher{}
 
 	// 6. Inyección de Dependencias: Instanciar los Casos de Uso (Application Layer)
@@ -101,18 +102,23 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-// --- IMPLEMENTACIONES TEMPORALES (STUBS) PARA PERMITIR COMPILACIÓN INMEDIATA ---
+// --- TOKEN SERVICE ---
 
-type stubTokenService struct{}
-
-// 🚀 CORREGIDO: Ahora acepta el slice de roles exigido por el puerto interno de Application
-func (s *stubTokenService) GenerateAccessToken(userID string, roles []string) (string, error) {
-	// Simula la firma de un JWT corto (15 min). En producción usarás "github.com/golang-jwt/jwt/v5"
-	return "jwt.mock.access_token.for_user_" + userID, nil
+type jwtTokenService struct {
+	secret []byte
 }
 
-func (s *stubTokenService) GenerateRefreshToken() (string, error) {
-	// Genera un token aleatorio seguro de 32 bytes para las sesiones de Redis
+func (s *jwtTokenService) GenerateAccessToken(userID string, roles []string) (string, error) {
+	claims := jwtlib.MapClaims{
+		"sub":  userID,
+		"exp":  time.Now().Add(24 * time.Hour).Unix(),
+		"iat":  time.Now().Unix(),
+	}
+	token := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, claims)
+	return token.SignedString(s.secret)
+}
+
+func (s *jwtTokenService) GenerateRefreshToken() (string, error) {
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err

@@ -3,37 +3,48 @@ package middleware
 import (
 	"net/http"
 	"strings"
-	// Aquí usarías una librería real de JWT como "github.com/golang-jwt/jwt/v5"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func AuthValidator(jwtSecret string) func(http.Handler) http.Handler {
+	secret := []byte(jwtSecret)
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-				http.Error(w, `{"error": "No autorizado", "message": "Token faltante o inválido"}`, http.StatusUnauthorized)
+				http.Error(w, `{"error":"No autorizado","message":"Token faltante o inválido"}`, http.StatusUnauthorized)
 				return
 			}
 
 			tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 
-			// 🔍 Simulación de validación de JWT (reemplazar con jwt.Parse en producción)
-			if tokenStr == "invalido" {
-				http.Error(w, `{"error": "No autorizado", "message": "Token expirado o corrupto"}`, http.StatusUnauthorized)
+			token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
+				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+					return nil, jwt.ErrSignatureInvalid
+				}
+				return secret, nil
+			})
+
+			if err != nil || !token.Valid {
+				http.Error(w, `{"error":"No autorizado","message":"Token expirado o inválido"}`, http.StatusUnauthorized)
 				return
 			}
 
-			// 🚀 Simulación de Claims obtenidos del JWT real.
-			// Ahora simulamos un usuario que tiene múltiples roles asignados en la base de datos.
-			userID := "user-123"
-			userRoles := []string{"PROPIETARIO", "INQUILINO"}
+			claims, ok := token.Claims.(jwt.MapClaims)
+			if !ok {
+				http.Error(w, `{"error":"No autorizado","message":"Claims inválidos"}`, http.StatusUnauthorized)
+				return
+			}
 
-			// Inyectamos los datos en los Headers de la request
+			userID, _ := claims["sub"].(string)
+			if userID == "" {
+				http.Error(w, `{"error":"No autorizado","message":"Token sin identidad de usuario"}`, http.StatusUnauthorized)
+				return
+			}
+
 			r.Header.Set("X-User-Id", userID)
-
-			// Unimos el slice de strings en un único string separado por comas: "PROPIETARIO,INQUILINO"
-			r.Header.Set("X-User-Roles", strings.Join(userRoles, ","))
-
 			next.ServeHTTP(w, r)
 		})
 	}

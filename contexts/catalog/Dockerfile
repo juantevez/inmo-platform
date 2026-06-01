@@ -7,14 +7,15 @@ WORKDIR /app
 COPY go.work go.work.su[m] ./
 
 # 2. Copiamos todos los go.mod y go.sum del monorrepo (estrategia antipánico para go.work)
-COPY shared/go.mo[d] shared/go.su[m] ./shared/
-COPY contexts/auth-identity/go.mo[d] contexts/auth-identity/go.su[m] ./contexts/auth-identity/
-COPY contexts/catalog/go.mo[d] contexts/catalog/go.su[m] ./contexts/catalog/
-COPY contexts/contracts/go.mo[d] contexts/contracts/go.su[m] ./contexts/contracts/
-COPY contexts/crm/go.mo[d] contexts/crm/go.su[m] ./contexts/crm/
-COPY contexts/finances/go.mo[d] contexts/finances/go.su[m] ./contexts/finances/
-COPY contexts/maintenance/go.mo[d] contexts/maintenance/go.su[m] ./contexts/maintenance/
 COPY contexts/api-gateway/go.mod contexts/api-gateway/go.sum ./contexts/api-gateway/
+COPY shared/go.mod shared/go.sum ./shared/
+COPY contexts/auth-identity/go.mod contexts/auth-identity/go.sum ./contexts/auth-identity/
+COPY contexts/catalog/go.mod contexts/catalog/go.sum ./contexts/catalog/
+COPY contexts/contracts/go.mod contexts/contracts/go.sum ./contexts/contracts/
+COPY contexts/crm/go.mod contexts/crm/go.sum ./contexts/crm/
+COPY contexts/finances/go.mod contexts/finances/go.sum ./contexts/finances/
+COPY contexts/maintenance/go.mod contexts/maintenance/go.sum ./contexts/maintenance/
+
 
 # Ahora Go puede validar todo el árbol del workspace y descargar en paz
 RUN go mod download

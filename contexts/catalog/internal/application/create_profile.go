@@ -25,12 +25,43 @@ type CreateProfileCommand struct {
 	LicenseNumber string // Opcional, solo comercial
 }
 
+type ProfileDTO struct {
+	UserID        string `json:"user_id"`
+	FirstName     string `json:"first_name"`
+	LastName      string `json:"last_name"`
+	Phone         string `json:"phone"`
+	ProfileType   string `json:"profile_type"`
+	CompanyName   string `json:"company_name,omitempty"`
+	LicenseNumber string `json:"license_number,omitempty"`
+	Status        string `json:"status"`
+}
+
 type CreateProfileUseCase struct {
 	profileRepo ports.ProfileRepository
 }
 
 func NewCreateProfileUseCase(profileRepo ports.ProfileRepository) *CreateProfileUseCase {
 	return &CreateProfileUseCase{profileRepo: profileRepo}
+}
+
+func (uc *CreateProfileUseCase) GetByUserID(ctx context.Context, userID string) (*ProfileDTO, error) {
+	profile, err := uc.profileRepo.FindByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("error al obtener el perfil: %w", err)
+	}
+	if profile == nil {
+		return nil, nil
+	}
+	return &ProfileDTO{
+		UserID:        profile.UserID(),
+		FirstName:     profile.FirstName(),
+		LastName:      profile.LastName(),
+		Phone:         profile.Phone(),
+		ProfileType:   string(profile.ProfileType()),
+		CompanyName:   profile.CompanyName(),
+		LicenseNumber: profile.LicenseNumber(),
+		Status:        string(profile.Status()),
+	}, nil
 }
 
 func (uc *CreateProfileUseCase) Execute(ctx context.Context, cmd CreateProfileCommand) error {

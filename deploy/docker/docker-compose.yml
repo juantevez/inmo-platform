@@ -12,12 +12,13 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # 🚀 Truco: Creamos la base de auth_db automáticamente al levantar por primera vez
+      # 🚀 Truco: Creamos la base de auth_db y inmo_maintenance_db automáticamente
       - ./init-multiple-databases.sh:/docker-entrypoint-initdb.d/init-multiple-databases.sh
     networks:
       - inmo-network
     healthcheck:
-      test: ["CMD-SHELL", "psql -U inmo_user -d inmo_catalog_db -c 'SELECT 1;' && psql -U inmo_user -d auth_db -c 'SELECT 1;'"]
+      # 🔍 Validamos las 3 bases de datos en el healthcheck para ir sobre seguro
+      test: ["CMD-SHELL", "psql -U inmo_user -d inmo_catalog_db -c 'SELECT 1;' && psql -U inmo_user -d auth_db -c 'SELECT 1;' && psql -U inmo_user -d inmo_maintenance_db -c 'SELECT 1;'"]
       interval: 3s
       timeout: 3s
       retries: 15
@@ -60,7 +61,6 @@ services:
     image: migrate/migrate
     container_name: inmo-auth-migration
     volumes:
-      # Apunta relativo a la carpeta de migraciones dentro del contexto
       - ../../contexts/auth-identity/migrations:/migrations
     command:
       - -path=/migrations
@@ -72,7 +72,80 @@ services:
     networks:
       - inmo-network
 
-# --- API Gateway: punto de acceso a los modulos ---
+  # --- MIGRATIONS: Corredor Automático para Catálogo (🛠️ CORREGIDO) ---
+  catalog-db-migration:
+    image: migrate/migrate
+    container_name: inmo-catalog-migration
+    volumes:
+      - ../../contexts/catalog/internal/adapters/postgres/migrations:/migrations
+    command:
+      - -path=/migrations
+      - -database=postgres://inmo_user:inmo_password@postgres:5432/inmo_catalog_db?sslmode=disable
+      - up
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - inmo-network
+
+  # ── MICROSERVICIO DE CATÁLOGO ───────────────────────────────────────────
+  catalog:
+    build:
+      context: ../../
+      dockerfile: ./contexts/catalog/Dockerfile
+      network: host
+    container_name: inmo-catalog
+    ports:
+      - "8081:8081"
+    environment:
+      - DATABASE_URL=postgres://inmo_user:inmo_password@postgres:5432/inmo_catalog_db?sslmode=disable
+      - NATS_URL=nats://nats:4222
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      catalog-db-migration:
+        condition: service_completed_successfully
+    networks:
+      - inmo-network
+
+  # --- MIGRATIONS: Corredor Automático para Mantenimiento (🛠️ CORREGIDO) ---
+  maintenance-db-migration:
+    image: migrate/migrate
+    container_name: inmo-maintenance-migration
+    volumes:
+      - ../../contexts/maintenance/internal/adapters/postgres/migrations:/migrations
+    command:
+      - -path=/migrations
+      - -database=postgres://inmo_user:inmo_password@postgres:5432/inmo_maintenance_db?sslmode=disable
+      - up
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - inmo-network
+
+  # ── MICROSERVICIO DE MANTENIMIENTO ──────────────────────────────────────
+  maintenance:
+    build:
+      context: ../../
+      dockerfile: contexts/maintenance/Dockerfile
+      network: host
+    container_name: inmo-maintenance
+    ports:
+      - "8083:8083"
+    environment:
+      - DATABASE_URL=postgres://inmo_user:inmo_password@postgres:5432/inmo_maintenance_db?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+      maintenance-db-migration:
+        condition: service_completed_successfully
+    networks:
+      - inmo-network
+
+  # --- API Gateway: punto de acceso a los módulos ---
   inmo-api-gateway:
     container_name: inmo-api-gateway
     build:
@@ -83,12 +156,12 @@ services:
       - "8000:8000"
     environment:
       - GATEWAY_PORT=:8000
-      - CATALOG_SERVICE_URL=http://inmo-catalog:8081
-      - CRM_SERVICE_URL=http://inmo-crm:8084
-      - AUTH_SERVICE_URL=http://inmo-auth-identity:8080
-      - MAINTENANCE_SERVICE_URL=http://inmo-maintenance:8083
-      - FINANCES_SERVICE_URL=http://inmo-finances:8082
-      - CONTRACTS_SERVICE_URL=http://inmo-contracts:8085
+      - CATALOG_SERVICE_URL=http://catalog:8081
+      - CRM_SERVICE_URL=http://crm:8084
+      - AUTH_SERVICE_URL=http://auth-identity:8080
+      - MAINTENANCE_SERVICE_URL=http://maintenance:8083
+      - FINANCES_SERVICE_URL=http://finances:8082
+      - CONTRACTS_SERVICE_URL=http://contracts:8085
       - JWT_SECRET=tu_super_secreto_local
     depends_on:
       catalog:
@@ -104,7 +177,7 @@ services:
     networks:
       - inmo-network
 
-  # --- MICROSERVICE: Auth & Identity (Tu módulo en Go) ---
+  # --- MICROSERVICE: Auth & Identity ---
   auth-identity:
     build:
       context: ../../contexts/auth-identity
@@ -117,9 +190,8 @@ services:
       - SERVER_PORT=:8080
       - DATABASE_URL=postgres://inmo_user:inmo_password@postgres:5432/auth_db?sslmode=disable
       - REDIS_URL=redis:6379
-      # El día que integres NATS real, la URL interna de conexión será nats://nats:4222
-      - NATS_URL=nats://nats:4222 
-      # 🚀 Inyección de secretos de SSO desde el archivo .env hacia Go:
+      - NATS_URL=nats:4222
+      - JWT_SECRET=tu_super_secreto_local
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
@@ -131,29 +203,7 @@ services:
       redis:
         condition: service_healthy
       auth-db-migration:
-        condition: service_completed_successfully # Espera a que las migraciones terminen bien
-    networks:
-      - inmo-network
-
-  catalog:
-    build:
-      context: ../../
-      dockerfile: contexts/catalog/Dockerfile
-      network: host
-    container_name: inmo-catalog
-    ports:
-      - "8081:8081"
-    environment:
-      - DATABASE_URL=postgres://inmo_user:inmo_password@inmo-postgres:5432/inmo_catalog_db?sslmode=disable
-      - NATS_URL=nats://inmo-nats:4222 
-      - DB_HOST=inmo-postgres
-      - DB_PORT=5432
-      - DB_USER=inmo_user
-      - DB_PASSWORD=inmo_password
-      - DB_NAME=inmo_catalog_db
-    depends_on:
-      postgres:
-        condition: service_healthy
+        condition: service_completed_successfully
     networks:
       - inmo-network
 
@@ -166,9 +216,9 @@ services:
     ports:
       - "8084:8084"
     environment:
-      - DATABASE_URL=postgres://inmo_user:inmo_password@inmo-postgres:5432/inmo_catalog_db?sslmode=disable
-      - NATS_URL=nats://inmo-nats:4222 
-      - DB_HOST=inmo-postgres
+      - DATABASE_URL=postgres://inmo_user:inmo_password@postgres:5432/inmo_catalog_db?sslmode=disable
+      - NATS_URL=nats:4222 
+      - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=inmo_user
       - DB_PASSWORD=inmo_password
@@ -188,9 +238,9 @@ services:
     ports:
       - "8085:8085"
     environment:
-      - DATABASE_URL=postgres://inmo_user:inmo_password@inmo-postgres:5432/inmo_catalog_db?sslmode=disable
-      - NATS_URL=nats://inmo-nats:4222 
-      - DB_HOST=inmo-postgres
+      - DATABASE_URL=postgres://inmo_user:inmo_password@postgres:5432/inmo_catalog_db?sslmode=disable
+      - NATS_URL=nats:4222 
+      - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=inmo_user
       - DB_PASSWORD=inmo_password
@@ -203,38 +253,20 @@ services:
 
   finances:
     build:
-      context: ../..                  # Sube a la raíz del monorrepo
-      dockerfile: contexts/finances/Dockerfile  # Ruta al Dockerfile nuevo
+      context: ../..
+      dockerfile: contexts/finances/Dockerfile
       network: host
     container_name: inmo-finances
     ports:
       - "8082:8082"
     environment:
-      - DATABASE_URL=postgres://inmo_user:inmo_password@inmo-postgres:5432/inmo_catalog_db?sslmode=disable
-      - NATS_URL=nats://inmo-nats:4222
+      - DATABASE_URL=postgres://inmo_user:inmo_password@postgres:5432/inmo_catalog_db?sslmode=disable
+      - NATS_URL=nats:4222
     depends_on:
-      - postgres 
+      postgres:
+        condition: service_healthy
     networks:
       - inmo-network 
-
-  maintenance:
-    build:
-      context: ../..
-      dockerfile: contexts/maintenance/Dockerfile
-      network: host      
-    container_name: inmo-maintenance
-    ports:
-      - "8083:8083"
-    environment:
-      - DATABASE_URL=postgres://inmo_user:inmo_password@inmo-postgres:5432/inmo_maintenance_db?sslmode=disable
-      - NATS_URL=nats://inmo-nats:4222
-    depends_on:
-      postgres:                       # 🚀 Cambiado de 'inmo-postgres' a 'postgres'
-        condition: service_healthy
-      nats:                           # 🚀 Cambiado de 'inmo-nats' a 'nats'
-        condition: service_healthy
-    networks:
-      - inmo-network
 
 volumes:
   postgres_data:
@@ -245,4 +277,4 @@ volumes:
 networks:
   inmo-network:
     driver: bridge
-    
+

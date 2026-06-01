@@ -29,6 +29,29 @@ func NewProfileHandler(createProfileUC *application.CreateProfileUseCase) *Profi
 	return &ProfileHandler{createProfileUC: createProfileUC}
 }
 
+// HandleGetProfile gestiona GET /api/v1/catalog/profiles/me
+func (h *ProfileHandler) HandleGetProfile(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("X-User-Id")
+	if userID == "" {
+		h.respondWithError(w, http.StatusUnauthorized, "Identidad del usuario no provista por el Gateway")
+		return
+	}
+
+	profile, err := h.createProfileUC.GetByUserID(r.Context(), userID)
+	if err != nil {
+		h.respondWithError(w, http.StatusInternalServerError, "Error al obtener el perfil")
+		return
+	}
+	if profile == nil {
+		h.respondWithError(w, http.StatusNotFound, "Perfil no encontrado")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(profile)
+}
+
 // HandleCreateOrUpdate gestiona el endpoint POST /api/v1/catalog/profiles
 func (h *ProfileHandler) HandleCreateOrUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

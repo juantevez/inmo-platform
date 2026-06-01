@@ -27,10 +27,9 @@ func NewPropertyHandler(
 	}
 }
 
-// Request para publicar propiedad
+// Request para publicar propiedad — owner_id lo provee el gateway vía X-User-Id
 type PublishRequest struct {
 	ID          string  `json:"id"`
-	OwnerID     string  `json:"owner_id"`
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
 	Price       float64 `json:"price"`
@@ -41,6 +40,12 @@ type PublishRequest struct {
 }
 
 func (h *PropertyHandler) Publish(w http.ResponseWriter, r *http.Request) {
+	ownerID := r.Header.Get("X-User-Id")
+	if ownerID == "" {
+		h.errorResponse(w, apperr.NewBadRequest("identidad del usuario no provista por el gateway", nil))
+		return
+	}
+
 	var req PublishRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.errorResponse(w, apperr.NewBadRequest("JSON inválido", err))
@@ -49,7 +54,7 @@ func (h *PropertyHandler) Publish(w http.ResponseWriter, r *http.Request) {
 
 	dto := application.PublishPropertyDTO{
 		ID:          req.ID,
-		OwnerID:     req.OwnerID,
+		OwnerID:     ownerID,
 		Title:       req.Title,
 		Description: req.Description,
 		Price:       req.Price,
