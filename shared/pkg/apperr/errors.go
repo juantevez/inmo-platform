@@ -11,6 +11,7 @@ const (
 	TypeNotFound         ErrorType = "NOT_FOUND"
 	TypeBadRequest       ErrorType = "BAD_REQUEST"
 	TypePreconditionFail ErrorType = "PRECONDITION_FAILED"
+	TypeForbidden        ErrorType = "FORBIDDEN"
 	TypeInternal         ErrorType = "INTERNAL_SERVER_ERROR"
 )
 
@@ -46,6 +47,10 @@ func NewPreconditionFailed(msg string, err error) error {
 	return &AppError{Type: TypePreconditionFail, Message: msg, Err: err}
 }
 
+func NewForbidden(msg string, err error) error {
+	return &AppError{Type: TypeForbidden, Message: msg, Err: err}
+}
+
 func NewInternal(msg string, err error) error {
 	return &AppError{Type: TypeInternal, Message: msg, Err: err}
 }
@@ -70,6 +75,8 @@ func HTTPStatusCode(err error) int {
 		return http.StatusBadRequest
 	case TypePreconditionFail:
 		return http.StatusPreconditionFailed
+	case TypeForbidden:
+		return http.StatusForbidden
 	case TypeInternal:
 		return http.StatusInternalServerError
 	default:
