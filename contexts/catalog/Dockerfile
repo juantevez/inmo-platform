@@ -14,6 +14,7 @@ COPY contexts/contracts/go.mo[d] contexts/contracts/go.su[m] ./contexts/contract
 COPY contexts/crm/go.mo[d] contexts/crm/go.su[m] ./contexts/crm/
 COPY contexts/finances/go.mo[d] contexts/finances/go.su[m] ./contexts/finances/
 COPY contexts/maintenance/go.mo[d] contexts/maintenance/go.su[m] ./contexts/maintenance/
+COPY contexts/api-gateway/go.mod contexts/api-gateway/go.sum ./contexts/api-gateway/
 
 # Ahora Go puede validar todo el árbol del workspace y descargar en paz
 RUN go mod download

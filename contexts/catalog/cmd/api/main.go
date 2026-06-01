@@ -56,8 +56,9 @@ func main() {
 	_ = natsConn.EnsureStream(initCtx, "catalog", []string{"catalog.property.*"})
 	initCancel()
 
-	// 3. Inicializar el Repositorio de Postgres
+	// 3. Inicializar los Repositorios de Postgres (¡Sumamos el de Perfiles!)
 	propertyRepo := postgres.NewPropertyRepository(dbPool)
+	profileRepo := postgres.NewPostgresProfileRepository(dbPool) // 🚀 NUEVO
 
 	// 4. Arrancar el Outbox Worker en segundo plano pasándole NATS
 	outboxWorker := postgres.NewOutboxWorker(dbPool, natsConn.JS)
@@ -73,13 +74,21 @@ func main() {
 		}
 	}()
 
-	// 5. Inicializar Casos de Uso
+	// 5. Inicializar Casos de Uso (¡Sumamos CreateProfile!)
 	publishUseCase := application.NewPublishPropertyUseCase(dbPool, propertyRepo)
 	listUseCase := application.NewListPropertiesUseCase(propertyRepo)
+	profileUseCase := application.NewCreateProfileUseCase(profileRepo) // 🚀 NUEVO
 
 	// 6. Inicializar Adaptadores de Entrada (HTTP API)
+	// 💡 NOTA: Le pasamos el nuevo profileUseCase a tu handler o enrutador.
+	// Dependiendo de cómo tome las rutas tu 'httpapi.NewRouter', vamos a necesitar inyectárselo.
 	propertyHandler := httpapi.NewPropertyHandler(publishUseCase, nil, listUseCase)
-	router := httpapi.NewRouter(propertyHandler)
+	profileHandler := httpapi.NewProfileHandler(profileUseCase) // 🚀 NUEVO
+
+	// Mezclamos o adaptamos el router.
+	// Para no romper tu 'httpapi.NewRouter', pasale también el nuevo handler si es necesario,
+	// o configuralo adentro de tu router.go de Catálogo.
+	router := httpapi.NewRouter(propertyHandler, profileHandler) // 🚀 ACTUALIZADO (Revisar firma de NewRouter)
 
 	// 7. Encender Servidor HTTP (Asignado puerto correcto :8081)
 	serverAddr := ":8081"

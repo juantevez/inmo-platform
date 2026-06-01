@@ -139,7 +139,6 @@ func (r *PostgresUserRepository) FindByEmail(ctx context.Context, email string) 
 }
 
 // Dentro de internal/adapters/postgres/user_repository.go
-
 func (r *PostgresUserRepository) FindRolesByUserID(ctx context.Context, userID string) ([]string, error) {
 	query := `SELECT role FROM user_roles WHERE user_id = $1`
 	rows, err := r.db.Pool.QueryContext(ctx, query, userID)
