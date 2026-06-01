@@ -198,9 +198,10 @@ func buildListWhere(f ports.ListFilters) (string, []interface{}) {
 		n++
 	}
 	if f.PetPolicy != "" {
-		clauses = append(clauses, fmt.Sprintf("pet_policy = $%d", n))
-		args = append(args, f.PetPolicy)
-		n++
+		// ALLOWED como filtro de búsqueda significa "acepta mascotas en cualquier modalidad"
+		clauses = append(clauses, fmt.Sprintf("pet_policy IN ($%d, $%d)", n, n+1))
+		args = append(args, string(domain.PetPolicyAllowed), string(domain.PetPolicySmallOnly))
+		n += 2
 	}
 	if f.MinPrice > 0 {
 		clauses = append(clauses, fmt.Sprintf("price >= $%d", n))
