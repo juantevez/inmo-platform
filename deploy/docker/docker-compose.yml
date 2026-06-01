@@ -72,7 +72,7 @@ services:
     networks:
       - inmo-network
 
-  # --- MIGRATIONS: Corredor Automático para Catálogo (🛠️ CORREGIDO) ---
+  # --- MIGRATIONS: Corredor Automático para Catálogo ---
   catalog-db-migration:
     image: migrate/migrate
     container_name: inmo-catalog-migration
@@ -85,6 +85,24 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - inmo-network
+
+  # --- MIGRATIONS: Corredor Automático para Contratos ---
+  # x-migrations-table evita colisión con la tabla schema_migrations de Catálogo
+  # (ambos servicios comparten inmo_catalog_db).
+  contracts-db-migration:
+    image: migrate/migrate
+    container_name: inmo-contracts-migration
+    volumes:
+      - ../../contexts/contracts/migrations:/migrations
+    command:
+      - -path=/migrations
+      - -database=postgres://inmo_user:inmo_password@postgres:5432/inmo_catalog_db?sslmode=disable&x-migrations-table=contracts_schema_migrations
+      - up
+    depends_on:
+      catalog-db-migration:
+        condition: service_completed_successfully
     networks:
       - inmo-network
 
@@ -240,15 +258,14 @@ services:
       - "8085:8085"
     environment:
       - DATABASE_URL=postgres://inmo_user:inmo_password@postgres:5432/inmo_catalog_db?sslmode=disable
-      - NATS_URL=nats:4222 
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=inmo_user
-      - DB_PASSWORD=inmo_password
-      - DB_NAME=inmo_catalog_db
+      - NATS_URL=nats://nats:4222
     depends_on:
       postgres:
         condition: service_healthy
+      nats:
+        condition: service_healthy
+      contracts-db-migration:
+        condition: service_completed_successfully
     networks:
       - inmo-network
 

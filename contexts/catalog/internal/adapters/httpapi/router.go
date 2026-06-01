@@ -9,6 +9,7 @@ func NewRouter(propertyHandler *PropertyHandler, profileHandler *ProfileHandler,
 	mux.HandleFunc("GET /api/v1/properties", propertyHandler.List)
 	mux.HandleFunc("POST /api/v1/properties", propertyHandler.Publish)
 	mux.HandleFunc("POST /api/v1/properties/{id}/reserve", propertyHandler.Reserve)
+	mux.HandleFunc("POST /api/v1/properties/{id}/quote", propertyHandler.Quote)
 
 	// Media de Propiedades (fotos, videos, enlaces de redes sociales)
 	mux.HandleFunc("POST /api/v1/properties/{id}/media/upload-url", mediaHandler.HandleGenerateUploadURL)

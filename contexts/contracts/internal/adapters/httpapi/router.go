@@ -4,27 +4,18 @@ import (
 	"net/http"
 )
 
-func NewRouter(h *ContractHandler) http.Handler {
+func NewRouter(h *ContractHandler, rh *ReservationHandler) http.Handler {
 	mux := http.NewServeMux()
 
-	// Rutas de contratos inmobiliarios
-	mux.HandleFunc("/api/v1/contracts", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			h.Create(w, r)
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-	})
+	// Contratos inmobiliarios (tradicional)
+	mux.HandleFunc("POST /api/v1/contracts", h.Create)
+	mux.HandleFunc("POST /api/v1/contracts/activate", h.Activate)
 
-	mux.HandleFunc("/api/v1/contracts/activate", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			h.Activate(w, r)
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-	})
+	// Reservas de alquiler temporario
+	mux.HandleFunc("POST /api/v1/reservations", rh.HandleCreate)
+	mux.HandleFunc("GET /api/v1/reservations/{id}", rh.HandleGet)
+	mux.HandleFunc("POST /api/v1/reservations/{id}/confirm", rh.HandleConfirm)
+	mux.HandleFunc("POST /api/v1/reservations/{id}/cancel", rh.HandleCancel)
 
 	return mux
 }

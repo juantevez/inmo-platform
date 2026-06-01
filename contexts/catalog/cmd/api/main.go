@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"inmo.platform/contexts/catalog/internal/adapters/httpapi"
+	"inmo.platform/contexts/catalog/internal/adapters/inmemory"
 	catalogNats "inmo.platform/contexts/catalog/internal/adapters/nats"
 	"inmo.platform/contexts/catalog/internal/adapters/postgres"
 	s3adapter "inmo.platform/contexts/catalog/internal/adapters/s3"
@@ -66,6 +67,7 @@ func main() {
 	propertyRepo := postgres.NewPropertyRepository(dbPool)
 	profileRepo := postgres.NewPostgresProfileRepository(dbPool)
 	mediaRepo := postgres.NewMediaRepository(dbPool)
+	blockedDatesRepo := postgres.NewBlockedDatesRepository(dbPool)
 
 	// 4. Outbox Worker + suscriptor de contratos
 	outboxWorker := postgres.NewOutboxWorker(dbPool, natsConn.JS)
@@ -75,6 +77,13 @@ func main() {
 	go func() {
 		if err := contractSubscriber.StartConsume(ctx); err != nil {
 			log.Printf("[CATALOG ERROR] Error crítico en el suscriptor de contratos: %v\n", err)
+		}
+	}()
+
+	reservationSubscriber := catalogNats.NewReservationSubscriber(dbPool, natsConn.JS)
+	go func() {
+		if err := reservationSubscriber.StartConsume(ctx); err != nil {
+			log.Printf("[CATALOG ERROR] Error crítico en el suscriptor de reservas: %v\n", err)
 		}
 	}()
 
@@ -93,15 +102,18 @@ func main() {
 	}
 
 	// 6. Casos de uso
+	eventPublisher := inmemory.NewEventPublisher()
 	publishUseCase := application.NewPublishPropertyUseCase(dbPool, propertyRepo)
+	changeStateUseCase := application.NewChangePropertyStateUseCase(propertyRepo, eventPublisher)
 	listUseCase := application.NewListPropertiesUseCase(propertyRepo)
+	quoteUseCase := application.NewQuotePropertyUseCase(propertyRepo, blockedDatesRepo)
 	profileUseCase := application.NewCreateProfileUseCase(profileRepo)
 	listMediaUseCase := application.NewListPropertyMediaUseCase(mediaRepo)
 	addMediaUseCase := application.NewAddPropertyMediaUseCase(propertyRepo, mediaRepo)
 	generateURLUseCase := application.NewGenerateUploadURLUseCase(propertyRepo, storageProvider)
 
 	// 7. Handlers HTTP
-	propertyHandler := httpapi.NewPropertyHandler(publishUseCase, nil, listUseCase)
+	propertyHandler := httpapi.NewPropertyHandler(publishUseCase, changeStateUseCase, listUseCase, quoteUseCase)
 	profileHandler := httpapi.NewProfileHandler(profileUseCase)
 	mediaHandler := httpapi.NewMediaHandler(generateURLUseCase, addMediaUseCase, listMediaUseCase)
 

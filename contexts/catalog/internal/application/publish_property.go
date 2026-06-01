@@ -21,6 +21,16 @@ type PublishPropertyDTO struct {
 	Address       string
 	OperationType string
 	PetPolicy     string
+	// Campos de alquiler temporario (opcionales, solo aplican si OperationType == "TEMP")
+	Amenities       []domain.Amenity
+	CheckInTime     string
+	CheckOutTime    string
+	MinNights       int
+	MaxNights       int
+	NightPrice      float64
+	CleaningFee     float64
+	SecurityDeposit float64
+	PricingRules    []domain.PricingRule
 }
 
 type PublishPropertyUseCase struct {
@@ -60,6 +70,23 @@ func (uc *PublishPropertyUseCase) Execute(ctx context.Context, dto PublishProper
 	if err != nil {
 		return err
 	}
+
+	if opType == domain.OperationTemp {
+		tc, err := domain.NewTempConfig(
+			dto.Amenities, dto.CheckInTime, dto.CheckOutTime,
+			dto.MinNights, dto.MaxNights,
+			dto.NightPrice, dto.CleaningFee, dto.SecurityDeposit,
+			dto.PricingRules,
+		)
+		if err != nil {
+			return err
+		}
+		property.SetTempConfig(tc)
+	}
+
+	// El evento se registra acá, después de SetTempConfig, para que el snapshot
+	// incluya night_price, pricing_rules, etc. con sus valores reales.
+	property.RecordEvent(domain.NewPropertyPublished(property))
 
 	// ─── TRANSACCIÓN ATÓMICA ───
 	tx, err := uc.dbPool.BeginTx(ctx, nil)

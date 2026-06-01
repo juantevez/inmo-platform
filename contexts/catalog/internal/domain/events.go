@@ -6,20 +6,78 @@ import (
 	"inmo.platform/shared/pkg/ddd"
 )
 
+// PropertySnapshot contiene la copia mínima de datos que Contratos necesita para
+// calcular precios y validar restricciones de reserva sin llamar a Catálogo en tiempo real.
+type PropertySnapshot struct {
+	OwnerID         string        `json:"owner_id"`
+	OperationType   string        `json:"operation_type"`
+	NightPrice      float64       `json:"night_price"`
+	CleaningFee     float64       `json:"cleaning_fee"`
+	SecurityDeposit float64       `json:"security_deposit"`
+	MinNights       int           `json:"min_nights"`
+	MaxNights       int           `json:"max_nights"`
+	CheckInTime     string        `json:"check_in_time"`
+	CheckOutTime    string        `json:"check_out_time"`
+	PricingRules    []PricingRule `json:"pricing_rules"`
+}
+
 // PropertyPublished se dispara cuando una propiedad pasa a estar disponible en el catálogo.
 type PropertyPublished struct {
 	ddd.BaseDomainEvent
-	OwnerID string `json:"owner_id"`
+	OwnerID  string          `json:"owner_id"`
+	Snapshot PropertySnapshot `json:"snapshot"`
 }
 
-func NewPropertyPublished(propertyID, ownerID string) PropertyPublished {
+func NewPropertyPublished(p *Property) PropertyPublished {
+	tc := p.TempConfig()
 	return PropertyPublished{
 		BaseDomainEvent: ddd.NewBaseDomainEvent(
 			nextUUID(),
-			propertyID,
+			p.ID(),
 			"catalog.property.published",
 		),
-		OwnerID: ownerID,
+		OwnerID: p.OwnerID(),
+		Snapshot: PropertySnapshot{
+			OwnerID:         p.OwnerID(),
+			OperationType:   string(p.OperationType()),
+			NightPrice:      tc.NightPrice(),
+			CleaningFee:     tc.CleaningFee(),
+			SecurityDeposit: tc.SecurityDeposit(),
+			MinNights:       tc.MinNights(),
+			MaxNights:       tc.MaxNights(),
+			CheckInTime:     tc.CheckInTime(),
+			CheckOutTime:    tc.CheckOutTime(),
+			PricingRules:    tc.PricingRules(),
+		},
+	}
+}
+
+// PropertyUpdated se dispara cuando el propietario modifica precio/amenities de la propiedad.
+type PropertyUpdated struct {
+	ddd.BaseDomainEvent
+	Snapshot PropertySnapshot `json:"snapshot"`
+}
+
+func NewPropertyUpdated(p *Property) PropertyUpdated {
+	tc := p.TempConfig()
+	return PropertyUpdated{
+		BaseDomainEvent: ddd.NewBaseDomainEvent(
+			nextUUID(),
+			p.ID(),
+			"catalog.property.updated",
+		),
+		Snapshot: PropertySnapshot{
+			OwnerID:         p.OwnerID(),
+			OperationType:   string(p.OperationType()),
+			NightPrice:      tc.NightPrice(),
+			CleaningFee:     tc.CleaningFee(),
+			SecurityDeposit: tc.SecurityDeposit(),
+			MinNights:       tc.MinNights(),
+			MaxNights:       tc.MaxNights(),
+			CheckInTime:     tc.CheckInTime(),
+			CheckOutTime:    tc.CheckOutTime(),
+			PricingRules:    tc.PricingRules(),
+		},
 	}
 }
 

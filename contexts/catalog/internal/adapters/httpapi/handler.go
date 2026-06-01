@@ -2,28 +2,34 @@ package httpapi
 
 import (
 	"encoding/json"
-	"inmo.platform/contexts/catalog/internal/application"
-	"inmo.platform/contexts/catalog/internal/ports"
-	"inmo.platform/shared/pkg/apperr"
 	"net/http"
 	"strconv"
+	"time"
+
+	"inmo.platform/contexts/catalog/internal/application"
+	"inmo.platform/contexts/catalog/internal/domain"
+	"inmo.platform/contexts/catalog/internal/ports"
+	"inmo.platform/shared/pkg/apperr"
 )
 
 type PropertyHandler struct {
 	publishUC     *application.PublishPropertyUseCase
 	changeStateUC *application.ChangePropertyStateUseCase
 	listUC        *application.ListPropertiesUseCase
+	quoteUC       *application.QuotePropertyUseCase
 }
 
 func NewPropertyHandler(
 	publishUC *application.PublishPropertyUseCase,
 	changeStateUC *application.ChangePropertyStateUseCase,
 	listUC *application.ListPropertiesUseCase,
+	quoteUC *application.QuotePropertyUseCase,
 ) *PropertyHandler {
 	return &PropertyHandler{
 		publishUC:     publishUC,
 		changeStateUC: changeStateUC,
 		listUC:        listUC,
+		quoteUC:       quoteUC,
 	}
 }
 
@@ -39,6 +45,16 @@ type PublishRequest struct {
 	Address       string  `json:"address"`
 	OperationType string  `json:"operation_type"`
 	PetPolicy     string  `json:"pet_policy"`
+	// Campos de alquiler temporario
+	Amenities       []domain.Amenity      `json:"amenities"`
+	CheckInTime     string                `json:"check_in_time"`
+	CheckOutTime    string                `json:"check_out_time"`
+	MinNights       int                   `json:"min_nights"`
+	MaxNights       int                   `json:"max_nights"`
+	NightPrice      float64               `json:"night_price"`
+	CleaningFee     float64               `json:"cleaning_fee"`
+	SecurityDeposit float64               `json:"security_deposit"`
+	PricingRules    []domain.PricingRule  `json:"pricing_rules"`
 }
 
 func (h *PropertyHandler) Publish(w http.ResponseWriter, r *http.Request) {
@@ -55,17 +71,26 @@ func (h *PropertyHandler) Publish(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dto := application.PublishPropertyDTO{
-		ID:            req.ID,
-		OwnerID:       ownerID,
-		Title:         req.Title,
-		Description:   req.Description,
-		Price:         req.Price,
-		Currency:      req.Currency,
-		Latitude:      req.Latitude,
-		Longitude:     req.Longitude,
-		Address:       req.Address,
-		OperationType: req.OperationType,
-		PetPolicy:     req.PetPolicy,
+		ID:              req.ID,
+		OwnerID:         ownerID,
+		Title:           req.Title,
+		Description:     req.Description,
+		Price:           req.Price,
+		Currency:        req.Currency,
+		Latitude:        req.Latitude,
+		Longitude:       req.Longitude,
+		Address:         req.Address,
+		OperationType:   req.OperationType,
+		PetPolicy:       req.PetPolicy,
+		Amenities:       req.Amenities,
+		CheckInTime:     req.CheckInTime,
+		CheckOutTime:    req.CheckOutTime,
+		MinNights:       req.MinNights,
+		MaxNights:       req.MaxNights,
+		NightPrice:      req.NightPrice,
+		CleaningFee:     req.CleaningFee,
+		SecurityDeposit: req.SecurityDeposit,
+		PricingRules:    req.PricingRules,
 	}
 
 	if err := h.publishUC.Execute(r.Context(), dto); err != nil {
@@ -132,6 +157,43 @@ func parseIntQuery(v string, def int) int {
 		return def
 	}
 	return n
+}
+
+// Quote: POST /api/v1/properties/{id}/quote
+func (h *PropertyHandler) Quote(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		CheckInDate  string `json:"check_in_date"`
+		CheckOutDate string `json:"check_out_date"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.errorResponse(w, apperr.NewBadRequest("JSON inválido", err))
+		return
+	}
+
+	checkIn, err := time.Parse("2006-01-02", req.CheckInDate)
+	if err != nil {
+		h.errorResponse(w, apperr.NewBadRequest("check_in_date inválida, usar formato YYYY-MM-DD", err))
+		return
+	}
+	checkOut, err := time.Parse("2006-01-02", req.CheckOutDate)
+	if err != nil {
+		h.errorResponse(w, apperr.NewBadRequest("check_out_date inválida, usar formato YYYY-MM-DD", err))
+		return
+	}
+
+	resp, err := h.quoteUC.Execute(r.Context(), application.QuoteCommand{
+		PropertyID:   r.PathValue("id"),
+		CheckInDate:  checkIn,
+		CheckOutDate: checkOut,
+	})
+	if err != nil {
+		h.errorResponse(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 // Helper para unificar las respuestas de error usando nuestro Shared Kernel

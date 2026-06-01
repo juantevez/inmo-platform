@@ -42,6 +42,7 @@ type Property struct {
 	state         PropertyState
 	operationType OperationType
 	petPolicy     PetPolicy
+	tempConfig    TempConfig // solo relevante cuando operationType == OperationTemp
 }
 
 // NewProperty es el constructor de fábrica que garantiza invariantes de creación.
@@ -71,8 +72,8 @@ func NewProperty(id, ownerID, title, description string, price Price, location L
 		petPolicy:     petPolicy,
 	}
 
-	// Registramos el evento de publicación inicial
-	p.RecordEvent(NewPropertyPublished(p.id, p.ownerID))
+	// El evento PropertyPublished se registra en el use case, después de SetTempConfig,
+	// para que el snapshot incluya los datos de pricing completos.
 
 	return p, nil
 }
@@ -127,6 +128,11 @@ func (p *Property) ReleaseRepair() error {
 	return nil
 }
 
+// SetTempConfig asocia la configuración de alquiler temporario al agregado.
+func (p *Property) SetTempConfig(cfg TempConfig) {
+	p.tempConfig = cfg
+}
+
 // --- Getters limpios ---
 
 func (p *Property) ID() string                   { return p.id }
@@ -138,3 +144,4 @@ func (p *Property) Location() Location           { return p.location }
 func (p *Property) State() PropertyState         { return p.state }
 func (p *Property) OperationType() OperationType { return p.operationType }
 func (p *Property) PetPolicy() PetPolicy         { return p.petPolicy }
+func (p *Property) TempConfig() TempConfig       { return p.tempConfig }
