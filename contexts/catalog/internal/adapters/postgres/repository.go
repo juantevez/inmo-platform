@@ -23,8 +23,8 @@ func NewPropertyRepository(db *sql.DB) *PropertyRepository {
 
 func (r *PropertyRepository) Save(ctx context.Context, p *domain.Property) error {
 	query := `
-		INSERT INTO properties (id, owner_id, title, description, price, currency, latitude, longitude, address, state, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)
+		INSERT INTO properties (id, owner_id, title, description, price, currency, latitude, longitude, address, state, operation_type, pet_policy, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
 		ON CONFLICT (id) DO UPDATE SET
 			title = EXCLUDED.title,
 			description = EXCLUDED.description,
@@ -34,6 +34,8 @@ func (r *PropertyRepository) Save(ctx context.Context, p *domain.Property) error
 			longitude = EXCLUDED.longitude,
 			address = EXCLUDED.address,
 			state = EXCLUDED.state,
+			operation_type = EXCLUDED.operation_type,
+			pet_policy = EXCLUDED.pet_policy,
 			updated_at = CURRENT_TIMESTAMP;
 	`
 
@@ -48,6 +50,8 @@ func (r *PropertyRepository) Save(ctx context.Context, p *domain.Property) error
 		p.Location().Longitude(),
 		p.Location().Address(),
 		string(p.State()),
+		string(p.OperationType()),
+		string(p.PetPolicy()),
 	)
 
 	if err != nil {
@@ -57,16 +61,16 @@ func (r *PropertyRepository) Save(ctx context.Context, p *domain.Property) error
 }
 
 func (r *PropertyRepository) FindByID(ctx context.Context, id string) (*domain.Property, error) {
-	query := `SELECT id, owner_id, title, description, price, currency, latitude, longitude, address, state FROM properties WHERE id = $1`
+	query := `SELECT id, owner_id, title, description, price, currency, latitude, longitude, address, state, operation_type, pet_policy FROM properties WHERE id = $1`
 
 	row := r.db.QueryRowContext(ctx, query, id)
 
 	var (
-		propID, ownerID, title, description, currency, state, address string
-		priceAmount, lat, lng                                         float64
+		propID, ownerID, title, description, currency, state, address, opType, petPolicy string
+		priceAmount, lat, lng                                                             float64
 	)
 
-	err := row.Scan(&propID, &ownerID, &title, &description, &priceAmount, &currency, &lat, &lng, &address, &state)
+	err := row.Scan(&propID, &ownerID, &title, &description, &priceAmount, &currency, &lat, &lng, &address, &state, &opType, &petPolicy)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil // Hexagonal: retornar nil si no existe, la capa de aplicacion decidira si es un 404
@@ -85,7 +89,7 @@ func (r *PropertyRepository) FindByID(ctx context.Context, id string) (*domain.P
 		return nil, err
 	}
 
-	property, err := domain.NewProperty(propID, ownerID, title, description, price, location)
+	property, err := domain.NewProperty(propID, ownerID, title, description, price, location, domain.OperationType(opType), domain.PetPolicy(petPolicy))
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +129,7 @@ func (r *PropertyRepository) FindAll(ctx context.Context, f ports.ListFilters) (
 	}
 	n := len(args) + 1
 	dataQuery := fmt.Sprintf(
-		"SELECT id, owner_id, title, description, price, currency, latitude, longitude, address, state FROM properties%s ORDER BY created_at DESC LIMIT $%d OFFSET $%d",
+		"SELECT id, owner_id, title, description, price, currency, latitude, longitude, address, state, operation_type, pet_policy FROM properties%s ORDER BY created_at DESC LIMIT $%d OFFSET $%d",
 		where, n, n+1,
 	)
 	args = append(args, limit, f.Offset)
@@ -139,10 +143,10 @@ func (r *PropertyRepository) FindAll(ctx context.Context, f ports.ListFilters) (
 	var properties []*domain.Property
 	for rows.Next() {
 		var (
-			propID, ownerID, title, description, currency, state, address string
-			priceAmount, lat, lng                                         float64
+			propID, ownerID, title, description, currency, state, address, opType, petPolicy string
+			priceAmount, lat, lng                                                             float64
 		)
-		if err := rows.Scan(&propID, &ownerID, &title, &description, &priceAmount, &currency, &lat, &lng, &address, &state); err != nil {
+		if err := rows.Scan(&propID, &ownerID, &title, &description, &priceAmount, &currency, &lat, &lng, &address, &state, &opType, &petPolicy); err != nil {
 			return nil, 0, apperr.NewInternal("error al escanear propiedad en postgres", err)
 		}
 
@@ -154,7 +158,7 @@ func (r *PropertyRepository) FindAll(ctx context.Context, f ports.ListFilters) (
 		if err != nil {
 			return nil, 0, err
 		}
-		property, err := domain.NewProperty(propID, ownerID, title, description, price, location)
+		property, err := domain.NewProperty(propID, ownerID, title, description, price, location, domain.OperationType(opType), domain.PetPolicy(petPolicy))
 		if err != nil {
 			return nil, 0, err
 		}
@@ -188,6 +192,16 @@ func buildListWhere(f ports.ListFilters) (string, []interface{}) {
 		args = append(args, f.State)
 		n++
 	}
+	if f.OperationType != "" {
+		clauses = append(clauses, fmt.Sprintf("operation_type = $%d", n))
+		args = append(args, f.OperationType)
+		n++
+	}
+	if f.PetPolicy != "" {
+		clauses = append(clauses, fmt.Sprintf("pet_policy = $%d", n))
+		args = append(args, f.PetPolicy)
+		n++
+	}
 	if f.MinPrice > 0 {
 		clauses = append(clauses, fmt.Sprintf("price >= $%d", n))
 		args = append(args, f.MinPrice)
@@ -208,18 +222,19 @@ func buildListWhere(f ports.ListFilters) (string, []interface{}) {
 // SaveWithTx permite guardar el agregado y sus eventos de outbox dentro de la misma transacción de base de datos
 func (r *PropertyRepository) SaveWithTx(ctx context.Context, tx *sql.Tx, p *domain.Property) error {
 	query := `
-		INSERT INTO properties (id, owner_id, title, description, price, currency, latitude, longitude, address, state, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)
+		INSERT INTO properties (id, owner_id, title, description, price, currency, latitude, longitude, address, state, operation_type, pet_policy, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
 		ON CONFLICT (id) DO UPDATE SET
 			title = EXCLUDED.title, description = EXCLUDED.description, price = EXCLUDED.price,
 			currency = EXCLUDED.currency, latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude,
-			address = EXCLUDED.address, state = EXCLUDED.state, updated_at = CURRENT_TIMESTAMP;
+			address = EXCLUDED.address, state = EXCLUDED.state, operation_type = EXCLUDED.operation_type,
+			pet_policy = EXCLUDED.pet_policy, updated_at = CURRENT_TIMESTAMP;
 	`
 
 	_, err := tx.ExecContext(ctx, query,
 		p.ID(), p.OwnerID(), p.Title(), p.Description(), p.Price().Amount(),
 		string(p.Price().Currency()), p.Location().Latitude(), p.Location().Longitude(),
-		p.Location().Address(), string(p.State()),
+		p.Location().Address(), string(p.State()), string(p.OperationType()), string(p.PetPolicy()),
 	)
 	if err != nil {
 		return apperr.NewInternal("error al guardar la propiedad en la tx de postgres", err)

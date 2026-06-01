@@ -10,15 +10,17 @@ import (
 
 // PublishPropertyDTO define los datos de entrada requeridos para publicar una propiedad.
 type PublishPropertyDTO struct {
-	ID          string
-	OwnerID     string
-	Title       string
-	Description string
-	Price       float64
-	Currency    string
-	Latitude    float64
-	Longitude   float64
-	Address     string
+	ID            string
+	OwnerID       string
+	Title         string
+	Description   string
+	Price         float64
+	Currency      string
+	Latitude      float64
+	Longitude     float64
+	Address       string
+	OperationType string
+	PetPolicy     string
 }
 
 type PublishPropertyUseCase struct {
@@ -44,7 +46,17 @@ func (uc *PublishPropertyUseCase) Execute(ctx context.Context, dto PublishProper
 		return err
 	}
 
-	property, err := domain.NewProperty(dto.ID, dto.OwnerID, dto.Title, dto.Description, price, location)
+	opType := domain.OperationType(dto.OperationType)
+	if opType == "" {
+		opType = domain.OperationSale
+	}
+
+	petPolicy := domain.PetPolicy(dto.PetPolicy)
+	if petPolicy == "" {
+		petPolicy = domain.PetPolicyNotAllowed
+	}
+
+	property, err := domain.NewProperty(dto.ID, dto.OwnerID, dto.Title, dto.Description, price, location, opType, petPolicy)
 	if err != nil {
 		return err
 	}

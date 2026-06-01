@@ -8,11 +8,13 @@ import (
 
 // ListFilters define los criterios de filtrado y paginación para listar propiedades.
 type ListFilters struct {
-	State    string
-	MinPrice float64
-	MaxPrice float64
-	Limit    int
-	Offset   int
+	State         string
+	OperationType string
+	PetPolicy     string
+	MinPrice      float64
+	MaxPrice      float64
+	Limit         int
+	Offset        int
 }
 
 // PropertyRepository define el contrato para persistir y recuperar el agregado Property.

@@ -29,14 +29,16 @@ func NewPropertyHandler(
 
 // Request para publicar propiedad — owner_id lo provee el gateway vía X-User-Id
 type PublishRequest struct {
-	ID          string  `json:"id"`
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Price       float64 `json:"price"`
-	Currency    string  `json:"currency"`
-	Latitude    float64 `json:"latitude"`
-	Longitude   float64 `json:"longitude"`
-	Address     string  `json:"address"`
+	ID            string  `json:"id"`
+	Title         string  `json:"title"`
+	Description   string  `json:"description"`
+	Price         float64 `json:"price"`
+	Currency      string  `json:"currency"`
+	Latitude      float64 `json:"latitude"`
+	Longitude     float64 `json:"longitude"`
+	Address       string  `json:"address"`
+	OperationType string  `json:"operation_type"`
+	PetPolicy     string  `json:"pet_policy"`
 }
 
 func (h *PropertyHandler) Publish(w http.ResponseWriter, r *http.Request) {
@@ -53,15 +55,17 @@ func (h *PropertyHandler) Publish(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dto := application.PublishPropertyDTO{
-		ID:          req.ID,
-		OwnerID:     ownerID,
-		Title:       req.Title,
-		Description: req.Description,
-		Price:       req.Price,
-		Currency:    req.Currency,
-		Latitude:    req.Latitude,
-		Longitude:   req.Longitude,
-		Address:     req.Address,
+		ID:            req.ID,
+		OwnerID:       ownerID,
+		Title:         req.Title,
+		Description:   req.Description,
+		Price:         req.Price,
+		Currency:      req.Currency,
+		Latitude:      req.Latitude,
+		Longitude:     req.Longitude,
+		Address:       req.Address,
+		OperationType: req.OperationType,
+		PetPolicy:     req.PetPolicy,
 	}
 
 	if err := h.publishUC.Execute(r.Context(), dto); err != nil {
@@ -95,9 +99,11 @@ func (h *PropertyHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
 	filters := ports.ListFilters{
-		State:  q.Get("status"),
-		Limit:  parseIntQuery(q.Get("limit"), 50),
-		Offset: parseIntQuery(q.Get("offset"), 0),
+		State:         q.Get("status"),
+		OperationType: q.Get("operation"),
+		PetPolicy:     q.Get("pets"),
+		Limit:         parseIntQuery(q.Get("limit"), 50),
+		Offset:        parseIntQuery(q.Get("offset"), 0),
 	}
 	if v := q.Get("min_price"); v != "" {
 		filters.MinPrice, _ = strconv.ParseFloat(v, 64)

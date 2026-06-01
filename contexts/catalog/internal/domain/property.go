@@ -14,35 +14,61 @@ const (
 	StateUnderRepair PropertyState = "UNDER_REPAIR"
 )
 
+type OperationType string
+
+const (
+	OperationSale OperationType = "SALE"
+	OperationRent OperationType = "RENT"
+	OperationTemp OperationType = "TEMP"
+)
+
+type PetPolicy string
+
+const (
+	PetPolicyAllowed    PetPolicy = "ALLOWED"
+	PetPolicyNotAllowed PetPolicy = "NOT_ALLOWED"
+	PetPolicySmallOnly  PetPolicy = "SMALL_ONLY"
+)
+
 // Property es la raíz del agregado para el contexto de Catálogo.
 type Property struct {
 	ddd.AggregateRoot
-	id          string
-	ownerID     string
-	title       string
-	description string
-	price       Price
-	location    Location
-	state       PropertyState
+	id            string
+	ownerID       string
+	title         string
+	description   string
+	price         Price
+	location      Location
+	state         PropertyState
+	operationType OperationType
+	petPolicy     PetPolicy
 }
 
 // NewProperty es el constructor de fábrica que garantiza invariantes de creación.
-func NewProperty(id, ownerID, title, description string, price Price, location Location) (*Property, error) {
+func NewProperty(id, ownerID, title, description string, price Price, location Location, opType OperationType, petPolicy PetPolicy) (*Property, error) {
 	if id == "" || ownerID == "" {
 		return nil, apperr.NewBadRequest("el ID de la propiedad y del propietario son obligatorios", nil)
 	}
 	if title == "" {
 		return nil, apperr.NewBadRequest("el título de la publicación no puede estar vacío", nil)
 	}
+	if opType != OperationSale && opType != OperationRent && opType != OperationTemp {
+		return nil, apperr.NewBadRequest("tipo de operación inválido: debe ser SALE, RENT o TEMP", nil)
+	}
+	if petPolicy != PetPolicyAllowed && petPolicy != PetPolicyNotAllowed && petPolicy != PetPolicySmallOnly {
+		return nil, apperr.NewBadRequest("política de mascotas inválida: debe ser ALLOWED, NOT_ALLOWED o SMALL_ONLY", nil)
+	}
 
 	p := &Property{
-		id:          id,
-		ownerID:     ownerID,
-		title:       title,
-		description: description,
-		price:       price,
-		location:    location,
-		state:       StateAvailable, // Nace disponible por defecto
+		id:            id,
+		ownerID:       ownerID,
+		title:         title,
+		description:   description,
+		price:         price,
+		location:      location,
+		state:         StateAvailable,
+		operationType: opType,
+		petPolicy:     petPolicy,
 	}
 
 	// Registramos el evento de publicación inicial
@@ -103,10 +129,12 @@ func (p *Property) ReleaseRepair() error {
 
 // --- Getters limpios ---
 
-func (p *Property) ID() string           { return p.id }
-func (p *Property) OwnerID() string      { return p.ownerID }
-func (p *Property) Title() string        { return p.title }
-func (p *Property) Description() string  { return p.description }
-func (p *Property) Price() Price         { return p.price }
-func (p *Property) Location() Location   { return p.location }
-func (p *Property) State() PropertyState { return p.state }
+func (p *Property) ID() string                   { return p.id }
+func (p *Property) OwnerID() string              { return p.ownerID }
+func (p *Property) Title() string                { return p.title }
+func (p *Property) Description() string          { return p.description }
+func (p *Property) Price() Price                 { return p.price }
+func (p *Property) Location() Location           { return p.location }
+func (p *Property) State() PropertyState         { return p.state }
+func (p *Property) OperationType() OperationType { return p.operationType }
+func (p *Property) PetPolicy() PetPolicy         { return p.petPolicy }

@@ -8,13 +8,15 @@ import (
 )
 
 type PropertyDTO struct {
-	ID          string      `json:"id"`
-	OwnerID     string      `json:"owner_id"`
-	Title       string      `json:"title"`
-	Description string      `json:"description"`
-	Price       PriceDTO    `json:"price"`
-	Location    LocationDTO `json:"location"`
-	State       string      `json:"state"`
+	ID            string      `json:"id"`
+	OwnerID       string      `json:"owner_id"`
+	Title         string      `json:"title"`
+	Description   string      `json:"description"`
+	Price         PriceDTO    `json:"price"`
+	Location      LocationDTO `json:"location"`
+	State         string      `json:"state"`
+	OperationType string      `json:"operation_type"`
+	PetPolicy     string      `json:"pet_policy"`
 }
 
 type PriceDTO struct {
@@ -69,6 +71,8 @@ func toPropertyDTO(p *domain.Property) PropertyDTO {
 			Longitude: p.Location().Longitude(),
 			Address:   p.Location().Address(),
 		},
-		State: string(p.State()),
+		State:         string(p.State()),
+		OperationType: string(p.OperationType()),
+		PetPolicy:     string(p.PetPolicy()),
 	}
 }
