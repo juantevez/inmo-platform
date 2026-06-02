@@ -39,29 +39,34 @@ func (s *ReservationSubscriber) StartConsume(ctx context.Context) error {
 		return fmt.Errorf("error al crear consumidor de reservas en catálogo: %w", err)
 	}
 
-	log.Println("[CATALOG NATS] 📡 Escuchando reservas confirmadas en 'contracts.reservation.confirmed'...")
-
 	iter, err := cons.Messages()
 	if err != nil {
 		return err
 	}
+	defer iter.Stop()
 
+	// Desbloquea iter.Next() cuando el contexto se cancele.
 	go func() {
-		for {
-			msg, err := iter.Next()
-			if err != nil {
-				log.Printf("[CATALOG NATS ERROR] Error al iterar mensajes de reservas: %v\n", err)
-				return
-			}
-			if err := s.processMessage(ctx, msg); err != nil {
-				log.Printf("[CATALOG NATS ERROR] Falló el bloqueo de fechas: %v\n", err)
-				continue
-			}
-			_ = msg.Ack()
-		}
+		<-ctx.Done()
+		iter.Stop()
 	}()
 
-	return nil
+	log.Println("[CATALOG NATS] Escuchando reservas confirmadas en 'contracts.reservation.confirmed'...")
+
+	for {
+		msg, err := iter.Next()
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return fmt.Errorf("error al iterar mensajes de reservas: %w", err)
+		}
+		if err := s.processMessage(ctx, msg); err != nil {
+			log.Printf("[CATALOG NATS ERROR] Falló el bloqueo de fechas: %v\n", err)
+			continue
+		}
+		_ = msg.Ack()
+	}
 }
 
 func (s *ReservationSubscriber) processMessage(ctx context.Context, msg jetstream.Msg) error {

@@ -15,6 +15,8 @@ type ReservationRepository interface {
 	FindByID(ctx context.Context, id string) (*domain.Reservation, error)
 	// HasOverlap verifica si ya existe una reserva CONFIRMED/PENDING para esas fechas.
 	HasOverlap(ctx context.Context, propertyID string, checkIn, checkOut time.Time) (bool, error)
+	// FindByOwnerID lista todas las reservas de un propietario con filtro de status opcional.
+	FindByOwnerID(ctx context.Context, ownerID, statusFilter string) ([]*domain.Reservation, error)
 }
 
 // PropertySnapshotRepository persiste el mirror local de datos de Catálogo.

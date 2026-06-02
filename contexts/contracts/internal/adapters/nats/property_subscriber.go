@@ -63,29 +63,34 @@ func (s *PropertySubscriber) StartConsume(ctx context.Context) error {
 		return fmt.Errorf("error al crear consumidor de propiedades en contratos: %w", err)
 	}
 
-	log.Println("[CONTRACTS NATS] 📡 Escuchando snapshots de propiedades en 'catalog.property.*'...")
-
 	iter, err := cons.Messages()
 	if err != nil {
 		return err
 	}
+	defer iter.Stop()
 
+	// Desbloquea iter.Next() cuando el contexto se cancele.
 	go func() {
-		for {
-			msg, err := iter.Next()
-			if err != nil {
-				log.Printf("[CONTRACTS NATS ERROR] Error al iterar eventos de catálogo: %v\n", err)
-				return
-			}
-			if err := s.processMessage(ctx, msg); err != nil {
-				log.Printf("[CONTRACTS NATS ERROR] Error al procesar snapshot: %v\n", err)
-				continue
-			}
-			_ = msg.Ack()
-		}
+		<-ctx.Done()
+		iter.Stop()
 	}()
 
-	return nil
+	log.Println("[CONTRACTS NATS] Escuchando snapshots de propiedades en 'catalog.property.*'...")
+
+	for {
+		msg, err := iter.Next()
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return fmt.Errorf("error al iterar eventos de catálogo: %w", err)
+		}
+		if err := s.processMessage(ctx, msg); err != nil {
+			log.Printf("[CONTRACTS NATS ERROR] Error al procesar snapshot: %v\n", err)
+			continue
+		}
+		_ = msg.Ack()
+	}
 }
 
 func (s *PropertySubscriber) processMessage(ctx context.Context, msg jetstream.Msg) error {

@@ -10,10 +10,11 @@ import (
 )
 
 type ReservationHandler struct {
-	createUC  *application.CreateReservationUseCase
-	confirmUC *application.ConfirmReservationUseCase
-	cancelUC  *application.CancelReservationUseCase
-	getUC     *application.GetReservationUseCase
+	createUC    *application.CreateReservationUseCase
+	confirmUC   *application.ConfirmReservationUseCase
+	cancelUC    *application.CancelReservationUseCase
+	getUC       *application.GetReservationUseCase
+	listOwnerUC *application.GetOwnerReservationsUseCase
 }
 
 func NewReservationHandler(
@@ -21,8 +22,9 @@ func NewReservationHandler(
 	confirmUC *application.ConfirmReservationUseCase,
 	cancelUC *application.CancelReservationUseCase,
 	getUC *application.GetReservationUseCase,
+	listOwnerUC *application.GetOwnerReservationsUseCase,
 ) *ReservationHandler {
-	return &ReservationHandler{createUC: createUC, confirmUC: confirmUC, cancelUC: cancelUC, getUC: getUC}
+	return &ReservationHandler{createUC: createUC, confirmUC: confirmUC, cancelUC: cancelUC, getUC: getUC, listOwnerUC: listOwnerUC}
 }
 
 // POST /api/v1/reservations
@@ -120,6 +122,29 @@ func (h *ReservationHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(dto)
+}
+
+// HandleListOwner — GET /api/v1/reservations/owner
+// Devuelve todas las reservas del propietario autenticado (via X-User-Id).
+// Query param opcional: ?status=PENDING_APPROVAL
+func (h *ReservationHandler) HandleListOwner(w http.ResponseWriter, r *http.Request) {
+	ownerID := r.Header.Get("X-User-Id")
+	if ownerID == "" {
+		h.errResp(w, apperr.NewBadRequest("identidad del usuario no provista", nil))
+		return
+	}
+
+	statusFilter := r.URL.Query().Get("status")
+
+	dtos, err := h.listOwnerUC.Execute(r.Context(), ownerID, statusFilter)
+	if err != nil {
+		h.errResp(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(dtos)
 }
 
 func (h *ReservationHandler) errResp(w http.ResponseWriter, err error) {

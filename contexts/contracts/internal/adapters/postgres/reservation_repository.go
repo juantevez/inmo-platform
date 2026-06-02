@@ -82,7 +82,7 @@ func (r *ReservationRepository) FindByID(ctx context.Context, id string) (*domai
 		FROM reservations WHERE id = $1`, id)
 
 	var (
-		resID, propID, tenantID, ownerID, status     string
+		resID, propID, tenantID, ownerID, status      string
 		checkIn, checkOut                             time.Time // DATE → time.Time directo
 		nights                                        int
 		nightPrice, discPct, cleaning, deposit, total float64
@@ -121,6 +121,75 @@ func (r *ReservationRepository) FindByID(ctx context.Context, id string) (*domai
 		domain.ReservationStatus(status), guestMsg.String,
 		confAt, canAt, createdAt, updatedAt,
 	), nil
+}
+
+func (r *ReservationRepository) FindByOwnerID(ctx context.Context, ownerID, statusFilter string) ([]*domain.Reservation, error) {
+	query := `
+		SELECT id, property_id, tenant_id, owner_id,
+		       check_in_date, check_out_date, nights,
+		       night_price_snapshot, discount_pct, cleaning_fee, security_deposit, total_amount,
+		       status, guest_message, confirmed_at, cancelled_at, created_at, updated_at
+		FROM reservations
+		WHERE owner_id = $1`
+
+	args := []interface{}{ownerID}
+
+	if statusFilter != "" {
+		query += ` AND status = $2`
+		args = append(args, statusFilter)
+	}
+
+	query += ` ORDER BY created_at DESC`
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, apperr.NewInternal("error al listar reservas del propietario", err)
+	}
+	defer rows.Close()
+
+	var result []*domain.Reservation
+	for rows.Next() {
+		var (
+			resID, propID, tenantID, ownerIDCol, status   string
+			checkIn, checkOut                             time.Time
+			nights                                        int
+			nightPrice, discPct, cleaning, deposit, total float64
+			guestMsg                                      sql.NullString
+			confirmedAt, cancelledAt                      sql.NullTime
+			createdAt, updatedAt                          time.Time
+		)
+		if err := rows.Scan(
+			&resID, &propID, &tenantID, &ownerIDCol,
+			&checkIn, &checkOut, &nights,
+			&nightPrice, &discPct, &cleaning, &deposit, &total,
+			&status, &guestMsg, &confirmedAt, &cancelledAt, &createdAt, &updatedAt,
+		); err != nil {
+			return nil, apperr.NewInternal("error al escanear reserva del propietario", err)
+		}
+
+		var confAt, canAt *time.Time
+		if confirmedAt.Valid {
+			t := confirmedAt.Time
+			confAt = &t
+		}
+		if cancelledAt.Valid {
+			t := cancelledAt.Time
+			canAt = &t
+		}
+
+		result = append(result, domain.ReconstructReservation(
+			resID, propID, tenantID, ownerIDCol, checkIn, checkOut, nights,
+			nightPrice, discPct, cleaning, deposit, total,
+			domain.ReservationStatus(status), guestMsg.String,
+			confAt, canAt, createdAt, updatedAt,
+		))
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, apperr.NewInternal("error al iterar reservas del propietario", err)
+	}
+
+	return result, nil
 }
 
 func (r *ReservationRepository) HasOverlap(ctx context.Context, propertyID string, checkIn, checkOut time.Time) (bool, error) {

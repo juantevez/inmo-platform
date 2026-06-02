@@ -1,9 +1,17 @@
 package httpapi
 
-import "net/http"
+import (
+	"net/http"
 
-func NewRouter(propertyHandler *PropertyHandler, profileHandler *ProfileHandler, mediaHandler *MediaHandler) http.Handler {
+	"inmo.platform/shared/pkg/health"
+)
+
+func NewRouter(propertyHandler *PropertyHandler, profileHandler *ProfileHandler, mediaHandler *MediaHandler, checker *health.Checker) http.Handler {
 	mux := http.NewServeMux()
+
+	// Health checks
+	mux.HandleFunc("GET /healthz/live", checker.LiveHandler)
+	mux.HandleFunc("GET /healthz/ready", checker.ReadyHandler)
 
 	// Rutas de Propiedades
 	mux.HandleFunc("GET /api/v1/properties", propertyHandler.List)

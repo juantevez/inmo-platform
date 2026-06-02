@@ -5,6 +5,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -14,6 +17,7 @@ import (
 	contractsNats "inmo.platform/contexts/contracts/internal/adapters/nats"
 	"inmo.platform/contexts/contracts/internal/adapters/postgres"
 	"inmo.platform/contexts/contracts/internal/application"
+	"inmo.platform/shared/pkg/health"
 	"inmo.platform/shared/pkg/pg"
 )
 
@@ -65,19 +69,31 @@ func main() {
 	reservationRepo := postgres.NewReservationRepository(dbPool)
 	snapshotRepo := postgres.NewSnapshotRepository(dbPool)
 
-	// 4. Outbox Worker
-	outboxWorker := postgres.NewOutboxWorker(dbPool, js)
-	go outboxWorker.Start(ctx, 5*time.Second)
+	// 4. Goroutines de background con WaitGroup y tracking de estado para health checks
+	var wg sync.WaitGroup
 
-	// 5. Subscriber: catalog.property.* → actualiza snapshots locales
-	propertySub := contractsNats.NewPropertySubscriber(dbPool, js)
+	outboxStatus := health.NewWorkerStatus("outbox_worker")
+	propertySubStatus := health.NewWorkerStatus("property_subscriber")
+
+	outboxWorker := postgres.NewOutboxWorker(dbPool, js)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+		defer outboxStatus.MarkStopped()
+		outboxWorker.Start(ctx, 5*time.Second)
+	}()
+
+	propertySub := contractsNats.NewPropertySubscriber(dbPool, js)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer propertySubStatus.MarkStopped()
 		if err := propertySub.StartConsume(ctx); err != nil {
 			log.Printf("[CONTRACTS ERROR] Subscriber de propiedades: %v\n", err)
 		}
 	}()
 
-	// 6. Casos de uso — contratos tradicionales
+	// 5. Casos de uso — contratos tradicionales
 	createUseCase := application.NewCreateContractUseCase(contractRepo)
 	activateUseCase := application.NewActivateContractUseCase(dbPool, contractRepo)
 
@@ -86,11 +102,13 @@ func main() {
 	confirmResUC := application.NewConfirmReservationUseCase(dbPool, reservationRepo, snapshotRepo)
 	cancelResUC := application.NewCancelReservationUseCase(dbPool, reservationRepo)
 	getResUC := application.NewGetReservationUseCase(reservationRepo, snapshotRepo)
+	listOwnerResUC := application.NewGetOwnerReservationsUseCase(reservationRepo, snapshotRepo)
 
-	// 7. Handlers HTTP
+	// 6. Handlers HTTP
 	contractHandler := httpapi.NewContractHandler(createUseCase, activateUseCase)
-	reservationHandler := httpapi.NewReservationHandler(createResUC, confirmResUC, cancelResUC, getResUC)
-	router := httpapi.NewRouter(contractHandler, reservationHandler)
+	reservationHandler := httpapi.NewReservationHandler(createResUC, confirmResUC, cancelResUC, getResUC, listOwnerResUC)
+	checker := health.NewChecker(dbPool, nc, outboxStatus, propertySubStatus)
+	router := httpapi.NewRouter(contractHandler, reservationHandler, checker)
 
 	server := &http.Server{
 		Addr:         ":8085",
@@ -99,8 +117,33 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 	}
 
-	log.Println("Servidor de Contratos y Reservas corriendo en :8085")
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Error crítico en el servidor: %v", err)
+	// 7. Manejo de señales OS
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	serverErr := make(chan error, 1)
+	go func() {
+		log.Println("Servidor de Contratos y Reservas corriendo en :8085")
+		serverErr <- server.ListenAndServe()
+	}()
+
+	select {
+	case err := <-serverErr:
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Error crítico en el servidor: %v", err)
+		}
+	case sig := <-quit:
+		log.Printf("[CONTRACTS] Señal recibida (%s), iniciando apagado graceful...", sig)
 	}
+
+	// 8. Apagado graceful: primero el HTTP, luego las goroutines de background
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("[CONTRACTS] Error durante el apagado del servidor HTTP: %v", err)
+	}
+
+	cancel()
+	wg.Wait()
+	log.Println("[CONTRACTS] Módulo apagado correctamente.")
 }

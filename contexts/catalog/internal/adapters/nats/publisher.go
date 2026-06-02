@@ -28,9 +28,8 @@ func NewContractSubscriber(db *sql.DB, js jetstream.JetStream) *ContractSubscrib
 	}
 }
 
-// StartConsume inicializa el consumidor durable y empieza a escuchar en background
+// StartConsume inicializa el consumidor durable y bloquea hasta que el contexto se cancele.
 func (s *ContractSubscriber) StartConsume(ctx context.Context) error {
-	// 1. Asegurar que exista el consumidor Durable para no perder mensajes si nos caemos
 	cons, err := s.js.CreateOrUpdateConsumer(ctx, "contracts", jetstream.ConsumerConfig{
 		Durable:       "catalog-contract-sync",
 		FilterSubject: "contracts.contract.activated",
@@ -40,35 +39,35 @@ func (s *ContractSubscriber) StartConsume(ctx context.Context) error {
 		return fmt.Errorf("error al crear consumidor durable en catálogo: %w", err)
 	}
 
-	log.Println("[CATALOG NATS] 📡 Escuchando firmas de contratos en 'contracts.contract.activated'...")
-
-	// 2. Consumir mensajes en bucle asincrónico
 	iter, err := cons.Messages()
 	if err != nil {
 		return err
 	}
+	defer iter.Stop()
 
+	// Desbloquea iter.Next() cuando el contexto se cancele.
 	go func() {
-		for {
-			msg, err := iter.Next()
-			if err != nil {
-				log.Printf("[CATALOG NATS ERROR] Error al iterar mensajes: %v\n", err)
-				return
-			}
-
-			// Procesar el mensaje de forma aislada
-			if err := s.processMessage(ctx, msg); err != nil {
-				log.Printf("[CATALOG NATS ERROR] Falló el procesamiento del evento: %v\n", err)
-				// Si falla, no le damos ACK, NATS lo va a reintentar según la política
-				continue
-			}
-
-			// Si todo salió bien, le avisamos a NATS que lo limpie de la cola
-			_ = msg.Ack()
-		}
+		<-ctx.Done()
+		iter.Stop()
 	}()
 
-	return nil
+	log.Println("[CATALOG NATS] Escuchando firmas de contratos en 'contracts.contract.activated'...")
+
+	for {
+		msg, err := iter.Next()
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return fmt.Errorf("error al iterar mensajes: %w", err)
+		}
+
+		if err := s.processMessage(ctx, msg); err != nil {
+			log.Printf("[CATALOG NATS ERROR] Falló el procesamiento del evento: %v\n", err)
+			continue
+		}
+		_ = msg.Ack()
+	}
 }
 
 func (s *ContractSubscriber) processMessage(ctx context.Context, msg jetstream.Msg) error {

@@ -5,6 +5,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	"inmo.platform/contexts/catalog/internal/adapters/httpapi"
@@ -15,6 +18,7 @@ import (
 	"inmo.platform/contexts/catalog/internal/application"
 	"inmo.platform/contexts/catalog/internal/ports"
 	"inmo.platform/shared/pkg/eventbus"
+	"inmo.platform/shared/pkg/health"
 	"inmo.platform/shared/pkg/pg"
 )
 
@@ -70,19 +74,36 @@ func main() {
 	mediaRepo := postgres.NewMediaRepository(dbPool)
 	blockedDatesRepo := postgres.NewBlockedDatesRepository(dbPool)
 
-	// 4. Outbox Worker + suscriptor de contratos
+	// 4. Goroutines de background con WaitGroup y tracking de estado para health checks
+	var wg sync.WaitGroup
+
+	outboxStatus := health.NewWorkerStatus("outbox_worker")
+	contractSubStatus := health.NewWorkerStatus("contract_subscriber")
+	reservationSubStatus := health.NewWorkerStatus("reservation_subscriber")
+
 	outboxWorker := postgres.NewOutboxWorker(dbPool, natsConn.JS)
-	go outboxWorker.Start(ctx, 20*time.Second)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer outboxStatus.MarkStopped()
+		outboxWorker.Start(ctx, 20*time.Second)
+	}()
 
 	contractSubscriber := catalogNats.NewContractSubscriber(dbPool, natsConn.JS)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+		defer contractSubStatus.MarkStopped()
 		if err := contractSubscriber.StartConsume(ctx); err != nil {
 			log.Printf("[CATALOG ERROR] Error crítico en el suscriptor de contratos: %v\n", err)
 		}
 	}()
 
 	reservationSubscriber := catalogNats.NewReservationSubscriber(dbPool, natsConn.JS)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+		defer reservationSubStatus.MarkStopped()
 		if err := reservationSubscriber.StartConsume(ctx); err != nil {
 			log.Printf("[CATALOG ERROR] Error crítico en el suscriptor de reservas: %v\n", err)
 		}
@@ -118,18 +139,43 @@ func main() {
 	profileHandler := httpapi.NewProfileHandler(profileUseCase)
 	mediaHandler := httpapi.NewMediaHandler(generateURLUseCase, addMediaUseCase, listMediaUseCase)
 
-	router := httpapi.NewRouter(propertyHandler, profileHandler, mediaHandler)
+	checker := health.NewChecker(dbPool, natsConn.NC, outboxStatus, contractSubStatus, reservationSubStatus)
+	router := httpapi.NewRouter(propertyHandler, profileHandler, mediaHandler, checker)
 
-	serverAddr := ":8081"
 	server := &http.Server{
-		Addr:         serverAddr,
+		Addr:         ":8081",
 		Handler:      router,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
 
-	log.Printf("Servidor API Catálogo corriendo en el puerto %s\n", serverAddr)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Error crítico en el servidor HTTP: %v", err)
+	// 8. Manejo de señales OS
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	serverErr := make(chan error, 1)
+	go func() {
+		log.Println("Servidor API Catálogo corriendo en el puerto :8081")
+		serverErr <- server.ListenAndServe()
+	}()
+
+	select {
+	case err := <-serverErr:
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Error crítico en el servidor HTTP: %v", err)
+		}
+	case sig := <-quit:
+		log.Printf("[CATALOG] Señal recibida (%s), iniciando apagado graceful...", sig)
 	}
+
+	// 9. Apagado graceful: primero el HTTP, luego las goroutines de background
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("[CATALOG] Error durante el apagado del servidor HTTP: %v", err)
+	}
+
+	cancel()
+	wg.Wait()
+	log.Println("[CATALOG] Módulo apagado correctamente.")
 }
