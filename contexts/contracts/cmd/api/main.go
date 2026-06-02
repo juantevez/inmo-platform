@@ -83,7 +83,7 @@ func main() {
 
 	// Casos de uso — reservas temporarias
 	createResUC := application.NewCreateReservationUseCase(dbPool, reservationRepo, snapshotRepo)
-	confirmResUC := application.NewConfirmReservationUseCase(dbPool, reservationRepo)
+	confirmResUC := application.NewConfirmReservationUseCase(dbPool, reservationRepo, snapshotRepo)
 	cancelResUC := application.NewCancelReservationUseCase(dbPool, reservationRepo)
 	getResUC := application.NewGetReservationUseCase(reservationRepo, snapshotRepo)
 

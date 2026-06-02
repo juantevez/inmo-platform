@@ -9,12 +9,13 @@ import (
 )
 
 type ConfirmReservationUseCase struct {
-	db      *sql.DB
-	resRepo ports.ReservationRepository
+	db       *sql.DB
+	resRepo  ports.ReservationRepository
+	snapRepo ports.PropertySnapshotRepository
 }
 
-func NewConfirmReservationUseCase(db *sql.DB, resRepo ports.ReservationRepository) *ConfirmReservationUseCase {
-	return &ConfirmReservationUseCase{db: db, resRepo: resRepo}
+func NewConfirmReservationUseCase(db *sql.DB, resRepo ports.ReservationRepository, snapRepo ports.PropertySnapshotRepository) *ConfirmReservationUseCase {
+	return &ConfirmReservationUseCase{db: db, resRepo: resRepo, snapRepo: snapRepo}
 }
 
 func (uc *ConfirmReservationUseCase) Execute(ctx context.Context, reservationID, ownerID string) (*ReservationDTO, error) {
@@ -46,5 +47,6 @@ func (uc *ConfirmReservationUseCase) Execute(ctx context.Context, reservationID,
 		return nil, apperr.NewInternal("error al confirmar transacción", err)
 	}
 
-	return toReservationDTO(reservation, nil), nil
+	snap, _ := uc.snapRepo.FindByID(ctx, reservation.PropertyID())
+	return toReservationDTO(reservation, snap), nil
 }

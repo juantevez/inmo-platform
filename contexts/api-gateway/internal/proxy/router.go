@@ -67,12 +67,14 @@ func (gr *GatewayRouter) MapRoutes() http.Handler {
 	privateMux.HandleFunc("/api/v1/finances", financesProxy.ServeHTTP)
 	privateMux.HandleFunc("/api/v1/contracts/", contractsProxy.ServeHTTP)
 	privateMux.HandleFunc("/api/v1/contracts", contractsProxy.ServeHTTP)
+	// Reservas temporarias (tenant debe estar logueado para crear/confirmar/cancelar)
+	privateMux.HandleFunc("/api/v1/reservations", contractsProxy.ServeHTTP)
+	privateMux.HandleFunc("/api/v1/reservations/", contractsProxy.ServeHTTP)
 
 	// ── Acoplamiento: cualquier ruta privada pasa por auth ──────────────────
 	gr.mux.Handle("/api/v1/properties", authMiddleware(privateMux))
 	gr.mux.Handle("/api/v1/properties/", authMiddleware(privateMux))
 
-	// 🚀 NUEVO - Acoplamiento para la ruta de perfiles
 	gr.mux.Handle("/api/v1/catalog/profiles", authMiddleware(privateMux))
 	gr.mux.Handle("/api/v1/catalog/profiles/", authMiddleware(privateMux))
 
@@ -81,6 +83,8 @@ func (gr *GatewayRouter) MapRoutes() http.Handler {
 	gr.mux.Handle("/api/v1/tickets/", authMiddleware(privateMux))
 	gr.mux.Handle("/api/v1/finances/", authMiddleware(privateMux))
 	gr.mux.Handle("/api/v1/contracts/", authMiddleware(privateMux))
+	gr.mux.Handle("/api/v1/reservations", authMiddleware(privateMux))
+	gr.mux.Handle("/api/v1/reservations/", authMiddleware(privateMux))
 
 	return gr.mux
 }

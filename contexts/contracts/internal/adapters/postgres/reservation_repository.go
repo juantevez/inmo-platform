@@ -82,13 +82,13 @@ func (r *ReservationRepository) FindByID(ctx context.Context, id string) (*domai
 		FROM reservations WHERE id = $1`, id)
 
 	var (
-		resID, propID, tenantID, ownerID, status  string
-		checkIn, checkOut                          string
-		nights                                     int
+		resID, propID, tenantID, ownerID, status     string
+		checkIn, checkOut                             time.Time // DATE → time.Time directo
+		nights                                        int
 		nightPrice, discPct, cleaning, deposit, total float64
-		guestMsg                                   sql.NullString
-		confirmedAt, cancelledAt                   sql.NullTime
-		createdAt, updatedAt                       time.Time
+		guestMsg                                      sql.NullString
+		confirmedAt, cancelledAt                      sql.NullTime
+		createdAt, updatedAt                          time.Time
 	)
 	err := row.Scan(
 		&resID, &propID, &tenantID, &ownerID,
@@ -103,8 +103,8 @@ func (r *ReservationRepository) FindByID(ctx context.Context, id string) (*domai
 		return nil, apperr.NewInternal("error al buscar reserva", err)
 	}
 
-	ci, _ := time.Parse("2006-01-02", checkIn)
-	co, _ := time.Parse("2006-01-02", checkOut)
+	ci := checkIn
+	co := checkOut
 	var confAt, canAt *time.Time
 	if confirmedAt.Valid {
 		t := confirmedAt.Time
