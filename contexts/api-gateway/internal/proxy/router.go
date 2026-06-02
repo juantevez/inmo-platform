@@ -39,9 +39,11 @@ func (gr *GatewayRouter) MapRoutes() http.Handler {
 	gr.mux.HandleFunc("GET /api/v1/auth/verify", authProxy.ServeHTTP)
 	gr.mux.HandleFunc("POST /api/v1/auth/sso/", authProxy.ServeHTTP)
 
-	// Catálogo (solo lectura pública)
+	// Catálogo (solo lectura pública — sin autenticación)
 	gr.mux.HandleFunc("GET /api/v1/properties", catalogProxy.ServeHTTP)
 	gr.mux.HandleFunc("GET /api/v1/properties/", catalogProxy.ServeHTTP)
+	// Media de propiedades: público para que compradores/inquilinos vean fotos sin login
+	gr.mux.HandleFunc("GET /api/v1/properties/{id}/media", catalogProxy.ServeHTTP)
 
 	// ── Rutas privadas (requieren token) ────────────────────────────────────
 	privateMux := http.NewServeMux()

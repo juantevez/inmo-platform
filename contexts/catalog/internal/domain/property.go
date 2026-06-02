@@ -70,6 +70,7 @@ func NewProperty(id, ownerID, title, description string, price Price, location L
 		state:         StateAvailable,
 		operationType: opType,
 		petPolicy:     petPolicy,
+		tempConfig:    DefaultTempConfig(), // defaults válidos para columnas NOT NULL
 	}
 
 	// El evento PropertyPublished se registra en el use case, después de SetTempConfig,

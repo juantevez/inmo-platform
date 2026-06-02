@@ -35,6 +35,7 @@ func main() {
 
 	awsBucket := os.Getenv("AWS_BUCKET_NAME")
 	awsRegion := os.Getenv("AWS_REGION")
+
 	if awsRegion == "" {
 		awsRegion = "us-east-1"
 	}

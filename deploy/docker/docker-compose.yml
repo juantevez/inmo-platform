@@ -118,6 +118,10 @@ services:
     environment:
       - DATABASE_URL=postgres://inmo_user:inmo_password@postgres:5432/inmo_catalog_db?sslmode=disable
       - NATS_URL=nats://nats:4222
+      - AWS_BUCKET_NAME=${AWS_BUCKET_NAME}
+      - AWS_REGION=${AWS_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
     depends_on:
       postgres:
         condition: service_healthy
