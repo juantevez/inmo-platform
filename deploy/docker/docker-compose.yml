@@ -185,6 +185,7 @@ services:
       - MAINTENANCE_SERVICE_URL=http://maintenance:8083
       - FINANCES_SERVICE_URL=http://finances:8082
       - CONTRACTS_SERVICE_URL=http://contracts:8085
+      - CHAT_SERVICE_URL=http://chat:8086 
       - JWT_SECRET=tu_super_secreto_local
     depends_on:
       catalog:
@@ -197,6 +198,8 @@ services:
         condition: service_started
       contracts:
         condition: service_started
+      chat:                       
+        condition: service_started        
     networks:
       - inmo-network
 
@@ -273,6 +276,44 @@ services:
     networks:
       - inmo-network
 
+  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  chat-db-migration:
+    image: migrate/migrate
+    volumes:
+      - ../../contexts/chat/migrations:/migrations
+    command:
+      - -path=/migrations
+      - -database=postgres://inmo_user:inmo_password@postgres:5432/inmo_catalog_db?sslmode=disable&x-migrations-table=chat_schema_migrations
+      - up
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - inmo-network
+
+  chat:
+    build:
+      context: ../../
+      dockerfile: contexts/chat/Dockerfile
+      network: host
+    container_name: inmo-chat
+    ports:
+      - "8086:8086"
+    environment:
+      - DATABASE_URL=postgres://inmo_user:inmo_password@postgres:5432/inmo_catalog_db?sslmode=disable
+      - NATS_URL=nats://nats:4222
+      - SERVER_PORT=:8086
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      chat-db-migration:
+        condition: service_completed_successfully
+    networks:
+      - inmo-network
+ 
+  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   finances:
     build:
       context: ../..
