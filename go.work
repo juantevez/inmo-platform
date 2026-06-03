@@ -4,6 +4,7 @@ use (
 	./contexts/api-gateway
 	./contexts/auth-identity
 	./contexts/catalog
+	./contexts/chat
 	./contexts/contracts
 	./contexts/crm
 	./contexts/finances

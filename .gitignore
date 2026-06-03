@@ -3,8 +3,10 @@
 vendor/
 bin/
 dist/
+.claude/
 *.test
 coverage.out
 
 
 main
+coverage.out

@@ -11,6 +11,7 @@ COPY contexts/auth-identity/go.mod contexts/auth-identity/go.sum ./contexts/auth
 COPY contexts/catalog/go.mod contexts/catalog/go.sum ./contexts/catalog/
 COPY contexts/contracts/go.mod contexts/contracts/go.sum ./contexts/contracts/
 COPY contexts/crm/go.mod contexts/crm/go.sum ./contexts/crm/
+COPY contexts/chat/go.mod contexts/chat/go.sum ./contexts/chat/
 COPY contexts/finances/go.mod contexts/finances/go.sum ./contexts/finances/
 COPY contexts/maintenance/go.mod contexts/maintenance/go.sum ./contexts/maintenance/
 
