@@ -54,7 +54,7 @@ func main() {
 	log.Println("CRM conectado exitosamente a NATS Core.")
 
 	// 3. Inicializar Adaptador de Salida Real (Postgres)
-	leadRepo := postgres.NewLeadRepository(dbPool)
+	leadRepo := postgres.NewPostgresLeadRepository(dbPool)
 
 	// 4. Inicializar Caso de Uso de Aplicación
 	createLeadUC := application.NewCreateAutoLeadUseCase(leadRepo)

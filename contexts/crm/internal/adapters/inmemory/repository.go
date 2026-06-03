@@ -2,9 +2,10 @@ package inmemory
 
 import (
 	"context"
-	"inmo.platform/contexts/crm/internal/domain"
 	"log"
 	"sync"
+
+	"inmo.platform/contexts/crm/internal/domain"
 )
 
 type LeadRepository struct {
@@ -21,7 +22,7 @@ func NewLeadRepository() *LeadRepository {
 func (r *LeadRepository) Save(ctx context.Context, lead *domain.Lead) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.leads[lead.ID()] = lead
-	log.Printf("[CRM DB MOCK] Lead guardado exitosamente -> ID: %s | Estado: %s | Propiedad vinculada: %s\n", lead.ID(), lead.State(), lead.PropertyID())
+	r.leads[lead.ID] = lead
+	log.Printf("[CRM DB MOCK] Lead guardado exitosamente -> ID: %s | Estado: %s | Propiedad vinculada: %s\n", lead.ID, lead.State, lead.PropertyID)
 	return nil
 }

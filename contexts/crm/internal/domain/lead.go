@@ -1,10 +1,11 @@
 package domain
 
 import (
-	"inmo.platform/shared/pkg/apperr"
-	"inmo.platform/shared/pkg/ddd"
+	"errors"
+	"time"
 )
 
+// LeadState mapea directamente al tipo VARCHAR(50) de tu columna 'state'
 type LeadState string
 
 const (
@@ -14,51 +15,50 @@ const (
 	StateClosed         LeadState = "CLOSED"
 )
 
-// Lead es la raíz del agregado para el contexto de CRM.
+// Errores de dominio (Invariantes)
+var (
+	ErrInvalidContact    = errors.New("el lead debe tener al menos un email o teléfono válido")
+	ErrInvalidTransition = errors.New("transición de estado no permitida en un lead cerrado")
+)
+
 type Lead struct {
-	ddd.AggregateRoot
-	id         string
-	propertyID string
-	clientName string
-	email      string
-	phone      string
-	state      LeadState
+	ID         string
+	PropertyID string    // Mapea a property_id
+	ClientName string    // Mapea a client_name
+	Email      string    // Mapea a email
+	Phone      string    // Mapea a phone
+	State      LeadState // Mapea a state
+	CreatedAt  time.Time // Mapea a created_at
+	UpdatedAt  time.Time // Mapea a updated_at
 }
 
-// NewLead es la fábrica que garantiza que todo interés esté ligado a una propiedad y un medio de contacto.
+// NewLead es el constructor del Agregado Raíz. Asegura las invariantes de creación.
 func NewLead(id, propertyID, clientName, email, phone string) (*Lead, error) {
-	if id == "" || propertyID == "" {
-		return nil, apperr.NewBadRequest("el ID del lead y de la propiedad son obligatorios", nil)
-	}
-	if clientName == "" {
-		return nil, apperr.NewBadRequest("el nombre del cliente es obligatorio", nil)
-	}
+	// Invariante 1: Todo lead debe referenciar un medio de contacto (email o teléfono)
 	if email == "" && phone == "" {
-		return nil, apperr.NewBadRequest("debe proveer al menos un medio de contacto (email o teléfono)", nil)
+		return nil, ErrInvalidContact
 	}
 
 	return &Lead{
-		id:         id,
-		propertyID: propertyID,
-		clientName: clientName,
-		email:      email,
-		phone:      phone,
-		state:      StateNew,
+		ID:         id,
+		PropertyID: propertyID,
+		ClientName: clientName,
+		Email:      email,
+		Phone:      phone,
+		State:      StateNew, // Inicia siempre en estado NUEVO
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
 	}, nil
 }
 
-// --- Mutadores de Estado ---
-
-func (l *Lead) MarkAsContacted() {
-	if l.state == StateNew {
-		l.state = StateContacted
+// TransitionTo permite avanzar el estado del Lead de forma segura
+func (l *Lead) TransitionTo(newState LeadState) error {
+	// Invariante: Un lead cerrado ya no puede cambiar de estado
+	if l.State == StateClosed {
+		return ErrInvalidTransition
 	}
-}
 
-// Getters
-func (l *Lead) ID() string         { return l.id }
-func (l *Lead) PropertyID() string { return l.propertyID }
-func (l *Lead) ClientName() string { return l.clientName }
-func (l *Lead) Email() string      { return l.email }
-func (l *Lead) Phone() string      { return l.phone }
-func (l *Lead) State() LeadState   { return l.state }
+	l.State = newState
+	l.UpdatedAt = time.Now()
+	return nil
+}
