@@ -1,6 +1,6 @@
 module inmo.platform/contexts/crm
 
-go 1.25.0
+go 1.19
 
 require github.com/nats-io/nats.go v1.52.0
 

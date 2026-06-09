@@ -100,6 +100,63 @@ func NewPropertyStateChanged(propertyID string, oldState, newState PropertyState
 	}
 }
 
+// PropertyMediaAdded se dispara cuando se agrega un nuevo archivo multimedia a una propiedad.
+// Este evento es utilizado por el servicio de redimensionamiento de imágenes.
+type PropertyMediaAdded struct {
+	ddd.BaseDomainEvent
+	MediaID    string   `json:"media_id"`
+	PropertyID string   `json:"property_id"`
+	URL        string   `json:"url"`
+	MediaType  string   `json:"media_type"`
+	OwnerID    string   `json:"owner_id"`
+	BucketName string   `json:"bucket_name"`
+	S3Key      string   `json:"s3_key"`
+	Region     string   `json:"region"`
+}
+
+func NewPropertyMediaAdded(media *domain.PropertyMedia, ownerID, bucketName, region string) PropertyMediaAdded {
+	s3Key := extractS3Key(media.URL())
+	return PropertyMediaAdded{
+		BaseDomainEvent: ddd.NewBaseDomainEvent(
+			nextUUID(),
+			media.PropertyID(),
+			"catalog.property.media_added",
+		),
+		MediaID:    media.ID(),
+		PropertyID: media.PropertyID(),
+		URL:        media.URL(),
+		MediaType:  string(media.Type()),
+		OwnerID:    ownerID,
+		BucketName: bucketName,
+		S3Key:      s3Key,
+		Region:     region,
+	}
+}
+
+// extractS3Key extrae la clave S3 desde una URL pública de S3
+// Ej: https://bucket.s3.us-east-1.amazonaws.com/properties/id/img.jpg -> properties/id/img.jpg
+func extractS3Key(url string) string {
+	if len(url) == 0 {
+		return ""
+	}
+	// Buscar el patrón ".amazonaws.com/" y tomar todo lo que sigue
+	const marker = ".amazonaws.com/"
+	idx := findSubstring(url, marker)
+	if idx == -1 {
+		return ""
+	}
+	return url[idx+len(marker):]
+}
+
+func findSubstring(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}
+
 // Helper rápido para generar IDs de eventos sin arrastrar dependencias externas pesadas aún
 func nextUUID() string {
 	b := make([]byte, 16)
