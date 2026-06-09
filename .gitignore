@@ -1,12 +1,54 @@
-.env
-*.local
+```
+# Go build artifacts
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Go cache and modules
+go.sum
+go.mod.bak
+*.mod.bak
+*.info
+
+# Dependencies
 vendor/
+
+# Build directories
 bin/
-dist/
-.claude/
+pkg/
+target/
+
+# Environment specific
+.env
+.env.local
+*.env.*
+
+# Logs
+*.log
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Coverage
+.coverage
+coverage/
+htmlcov/
+
+# Testing
 *.test
-coverage.out
+*.prof
 
-
-main
-coverage.out
+# Temporary files
+*.tmp
+*.temp
+*~
+```
