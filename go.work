@@ -1,13 +1,13 @@
-go 1.23
+go 1.25.0
 
 use (
-./contexts/api-gateway
-./contexts/auth-identity
-./contexts/catalog
-./contexts/chat
-./contexts/contracts
-./contexts/crm
-./contexts/finances
-./contexts/maintenance
-./shared
+	./contexts/api-gateway
+	./contexts/auth-identity
+	./contexts/catalog
+	./contexts/chat
+	./contexts/contracts
+	./contexts/crm
+	./contexts/finances
+	./contexts/maintenance
+	./shared
 )

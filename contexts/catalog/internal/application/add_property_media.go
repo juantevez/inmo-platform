@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -71,7 +72,7 @@ func (uc *AddPropertyMediaUseCase) Execute(ctx context.Context, cmd AddMediaComm
 	// Solo publicar evento si es una imagen y hay configuración de S3
 	if domain.MediaType(cmd.Type) == domain.MediaTypeImage && uc.bucketName != "" {
 		event := domain.NewPropertyMediaAdded(media, cmd.RequesterID, uc.bucketName, uc.awsRegion)
-		
+
 		// Publicar mediante outbox para garantizar entrega
 		if err := uc.publishViaOutbox(ctx, event); err != nil {
 			// Log pero no fallar la operación principal
@@ -93,7 +94,7 @@ func (uc *AddPropertyMediaUseCase) publishViaOutbox(ctx context.Context, event d
 	if baseEvent, ok := event.(interface{ EventName() string }); ok {
 		eventName = baseEvent.EventName()
 	}
-	
+
 	if eventName == "" {
 		return apperr.NewInternal("evento sin nombre válido", nil)
 	}
@@ -113,6 +114,6 @@ func (uc *AddPropertyMediaUseCase) publishViaOutbox(ctx context.Context, event d
 // nextUUID genera un UUID simple para el evento
 func nextUUID() string {
 	b := make([]byte, 16)
-	_, _ = fmt.Fprintf(b, "%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
-	return string(b)
+	_, _ = rand.Read(b)
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }

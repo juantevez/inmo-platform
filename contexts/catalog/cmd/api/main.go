@@ -132,7 +132,8 @@ func main() {
 	updateUseCase := application.NewUpdatePropertyUseCase(dbPool, propertyRepo)
 	profileUseCase := application.NewCreateProfileUseCase(profileRepo)
 	listMediaUseCase := application.NewListPropertyMediaUseCase(mediaRepo)
-	addMediaUseCase := application.NewAddPropertyMediaUseCase(propertyRepo, mediaRepo)
+	//addMediaUseCase := application.NewAddPropertyMediaUseCase(propertyRepo, mediaRepo)
+	addMediaUseCase := application.NewAddPropertyMediaUseCase(propertyRepo, mediaRepo, dbPool)
 	generateURLUseCase := application.NewGenerateUploadURLUseCase(propertyRepo, storageProvider)
 
 	// 7. Handlers HTTP
