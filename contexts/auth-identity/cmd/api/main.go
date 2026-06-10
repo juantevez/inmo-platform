@@ -71,13 +71,33 @@ func main() {
 	loginPassUC := application.NewLoginPasswordUseCase(userRepo, tokenRepo, tokenService, eventPublisher, uuidGenerator)
 	verifyEmailUC := application.NewVerifyEmailUseCase(userRepo, tokenRepo, tokenService, eventPublisher, uuidGenerator)
 
+	// Credenciales OAuth desde variables de entorno
+	googleClientID    := getEnv("GOOGLE_CLIENT_ID", "")
+	googleClientSecret := getEnv("GOOGLE_CLIENT_SECRET", "")
+	googleRedirectURI  := getEnv("GOOGLE_REDIRECT_URI", "http://localhost:5500/loginregister.html")
+	metaAppID         := getEnv("META_APP_ID", "")
+
+	// Seleccionar adaptador de Google: real si hay credenciales, stub si no
+	var googleIdentity ports.IdentityService
+	if googleClientID != "" && googleClientSecret != "" {
+		googleIdentity = oauth.NewGoogleAdapter(googleClientID, googleClientSecret, googleRedirectURI)
+	} else {
+		googleIdentity = &stubIdentityService{}
+	}
+
 	metaAdapter := oauth.NewMetaAdapter()
 
-	loginGoogleUC := application.NewLoginSSOGoogleUseCase(userRepo, tokenRepo, &stubIdentityService{}, tokenService, eventPublisher, uuidGenerator)
+	loginGoogleUC := application.NewLoginSSOGoogleUseCase(userRepo, tokenRepo, googleIdentity, tokenService, eventPublisher, uuidGenerator)
 	loginMetaUC := application.NewLoginSSOMetaUseCase(userRepo, tokenRepo, metaAdapter, tokenService, eventPublisher, uuidGenerator)
 
+	ssoConfig := httpapi.SSOPublicConfig{
+		GoogleClientID:    googleClientID,
+		GoogleRedirectURI: googleRedirectURI,
+		MetaAppID:         metaAppID,
+	}
+
 	// 7. Conectar la capa HTTP entubando los Casos de Uso al enrutador nativo
-	authHandler := httpapi.NewAuthHandler(registerUC, loginPassUC, verifyEmailUC, loginGoogleUC, loginMetaUC)
+	authHandler := httpapi.NewAuthHandler(registerUC, loginPassUC, verifyEmailUC, loginGoogleUC, loginMetaUC, ssoConfig)
 	router := httpapi.NewRouter(authHandler)
 
 	// 8. Levantar el servidor HTTP escuchando en el puerto configurado

@@ -9,12 +9,19 @@ import (
 	"inmo.platform/contexts/auth-identity/internal/application"
 )
 
+type SSOPublicConfig struct {
+	GoogleClientID   string `json:"google_client_id"`
+	GoogleRedirectURI string `json:"google_redirect_uri"`
+	MetaAppID        string `json:"meta_app_id"`
+}
+
 type AuthHandler struct {
 	registerUC    *application.RegisterUserUseCase
 	loginPassUC   *application.LoginPasswordUseCase
 	verifyEmailUC *application.VerifyEmailUseCase
 	loginGoogleUC *application.LoginSSOGoogleUseCase
-	loginMetaUC   *application.LoginSSOMetaUseCase // ◄ 1. Agregado el caso de uso de Meta
+	loginMetaUC   *application.LoginSSOMetaUseCase
+	ssoConfig     SSOPublicConfig
 }
 
 func NewAuthHandler(
@@ -22,14 +29,16 @@ func NewAuthHandler(
 	loginPassUC *application.LoginPasswordUseCase,
 	verifyEmailUC *application.VerifyEmailUseCase,
 	loginGoogleUC *application.LoginSSOGoogleUseCase,
-	loginMetaUC *application.LoginSSOMetaUseCase, // ◄ 2. Inyectado en el constructor
+	loginMetaUC *application.LoginSSOMetaUseCase,
+	ssoConfig SSOPublicConfig,
 ) *AuthHandler {
 	return &AuthHandler{
 		registerUC:    registerUC,
 		loginPassUC:   loginPassUC,
 		verifyEmailUC: verifyEmailUC,
 		loginGoogleUC: loginGoogleUC,
-		loginMetaUC:   loginMetaUC, // ◄ 3. Asignado al struct
+		loginMetaUC:   loginMetaUC,
+		ssoConfig:     ssoConfig,
 	}
 }
 
@@ -186,6 +195,13 @@ func (h *AuthHandler) HandleMetaLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.respondWithJSON(w, http.StatusOK, resp)
+}
+
+// HandleSSOConfig: GET /api/v1/auth/sso/config
+// Devuelve los valores públicos de OAuth que el frontend necesita para iniciar
+// los flujos de Google y Meta sin hardcodear credenciales en el cliente.
+func (h *AuthHandler) HandleSSOConfig(w http.ResponseWriter, r *http.Request) {
+	h.respondWithJSON(w, http.StatusOK, h.ssoConfig)
 }
 
 // Helper interno para reutilizar la extracción de IP

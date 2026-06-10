@@ -42,6 +42,7 @@ func (gr *GatewayRouter) MapRoutes() http.Handler {
 	gr.mux.HandleFunc("POST /api/v1/auth/login", authProxy.ServeHTTP)
 	gr.mux.HandleFunc("POST /api/v1/auth/register", authProxy.ServeHTTP)
 	gr.mux.HandleFunc("GET /api/v1/auth/verify", authProxy.ServeHTTP)
+	gr.mux.HandleFunc("GET /api/v1/auth/sso/config", authProxy.ServeHTTP)
 	gr.mux.HandleFunc("POST /api/v1/auth/sso/", authProxy.ServeHTTP)
 
 	// Catálogo (solo lectura pública)
