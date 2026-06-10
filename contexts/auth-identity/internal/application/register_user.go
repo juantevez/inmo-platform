@@ -12,17 +12,31 @@ import (
 
 var (
 	ErrEmailAlreadyExists = errors.New("el correo electrónico ya se encuentra registrado")
+	// ErrInvalidRole se devuelve cuando el frontend envía un rol que no existe en el sistema
+	ErrInvalidRole = errors.New("el rol especificado no es válido")
 )
+
+// rolesValidos define el conjunto de roles que el sistema acepta en el registro.
+// SSO auto-registra siempre como INTERESADO hasta que el usuario completa su perfil.
+var rolesValidos = map[string]bool{
+	"INQUILINO":   true,
+	"PROPIETARIO": true,
+	"AGENTE":      true,
+	"PROVEEDOR":   true,
+	"INTERESADO":  true,
+}
 
 // RegisterUserCommand transporta los datos de entrada desde el controlador HTTP
 type RegisterUserCommand struct {
 	Email    string
 	Password string
+	Role     string // ← NUEVO: requerido. Ej: "PROPIETARIO", "INQUILINO", "PROVEEDOR"
 }
 
 // RegisterUserResponse retorna la data resultante que pide el requerimiento (sin JWT)
 type RegisterUserResponse struct {
 	UserID string
+	Role   string // ← devolvemos el rol asignado para confirmación al frontend
 }
 
 // UUIDGenerator define un pequeño puerto interno para desacoplar la creación de IDs/Tokens
@@ -43,47 +57,49 @@ func NewRegisterUserUseCase(repo ports.UserRepository, publisher ports.EventPubl
 }
 
 func (uc *RegisterUserUseCase) Execute(ctx context.Context, cmd RegisterUserCommand) (*RegisterUserResponse, error) {
+	// 0. Validar el rol ANTES de ir a la base de datos
+	// Si el frontend no envía role o manda uno inválido, cortamos rápido con 400
+	if cmd.Role == "" || !rolesValidos[cmd.Role] {
+		return nil, ErrInvalidRole
+	}
+
 	// 1. Validar si el email ya existe en el sistema
 	existingUser, err := uc.userRepo.FindByEmail(ctx, cmd.Email)
 	if err != nil {
 		return nil, fmt.Errorf("error al verificar existencia de email: %w", err)
 	}
 
-	// Flujo alternativo: El correo ya está ocupado
 	if existingUser != nil {
-		// Buscamos con qué proveedor está para poder darle una sugerencia exacta al cliente
 		emailProvider, _ := uc.userRepo.FindProvider(ctx, existingUser.ID(), domain.ProviderEmail)
 		if emailProvider != nil {
-			return nil, ErrEmailAlreadyExists // Retorna 409 Conflict en la capa HTTP
+			return nil, ErrEmailAlreadyExists // 409 Conflict
 		}
-
 		return nil, errors.New("el email está registrado mediante SSO (Google/Meta). Intente iniciar sesión con ese proveedor")
 	}
 
-	// 2. Crear las IDs necesarias usando nuestro generador desacoplado
+	// 2. Crear las IDs necesarias
 	userID := uc.uuidGen()
 	providerID := uc.uuidGen()
 	tokenValue := uc.uuidGen()
 
-	// 3. Instanciar el Agregado User (Nace en estado PENDING_VERIFICATION)
+	// 3. Instanciar el Agregado User (nace en PENDING_VERIFICATION)
 	user, err := domain.NewUser(userID, cmd.Email)
 	if err != nil {
-		return nil, err // Devuelve errores de formato de mail, etc.
+		return nil, err
 	}
 
-	// 4. Instanciar el Provider genérico configurado como EMAIL
-	// (Asegurate de que este constructor devuelva un *domain.IdentityProvider)
+	// 4. Instanciar el Provider EMAIL
 	emailProvider, err := domain.NewEmailProvider(providerID, user.ID(), user.Email(), cmd.Password)
 	if err != nil {
 		return nil, err
 	}
 
-	// 5. Generar el Token de Verificación (TTL 24h autogestionado por el dominio)
+	// 5. Generar el Token de Verificación (TTL 24h)
 	verificationToken := domain.NewEmailVerificationToken(tokenValue, user.ID())
 
-	// 6. Persistencia Atómica: Guardamos el usuario, su método de auth y el token
-	// Definimos el rol por defecto para los registros automáticos por SSO
-	initialRoles := []string{"INQUILINO"}
+	// 6. Persistencia Atómica con el rol que eligió el usuario en el frontend
+	// Ya no hay hardcodeo — el rol viene del comando validado arriba
+	initialRoles := []string{cmd.Role}
 	err = uc.userRepo.Save(ctx, user, emailProvider, initialRoles)
 	if err != nil {
 		return nil, fmt.Errorf("error al guardar el usuario en la base de datos: %w", err)
@@ -94,7 +110,7 @@ func (uc *RegisterUserUseCase) Execute(ctx context.Context, cmd RegisterUserComm
 		return nil, fmt.Errorf("error al guardar el token de verificación: %w", err)
 	}
 
-	// 7. Disparar Evento de Dominio a NATS JetStream (Para que el bot de WhatsApp o Mailer lo envíe asincrónicamente)
+	// 7. Disparar Evento de Dominio a NATS JetStream
 	authEvent := ports.AuthEvent{
 		EventID:   uc.uuidGen(),
 		Name:      "auth.user.created",
@@ -102,16 +118,14 @@ func (uc *RegisterUserUseCase) Execute(ctx context.Context, cmd RegisterUserComm
 		Timestamp: time.Now(),
 		Payload: map[string]interface{}{
 			"email":              user.Email(),
+			"role":               cmd.Role, // ← incluimos el rol en el evento para que otros módulos reaccionen
 			"verification_token": verificationToken.Value(),
 		},
 	}
-
-	// No bloqueamos el flujo si NATS falla, lo mandamos como un log o lo manejamos con Outbox si fuese crítico.
-	// En este caso, para simplificar el arranque de Auth, lo tiramos directo al puerto del publisher.
 	_ = uc.eventPublisher.PublishEvent(ctx, authEvent)
 
-	// 8. Responder con el ID creado (Post-condición: Sin JWT todavía)
 	return &RegisterUserResponse{
 		UserID: user.ID(),
+		Role:   cmd.Role,
 	}, nil
 }

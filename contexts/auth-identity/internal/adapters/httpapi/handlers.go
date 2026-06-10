@@ -10,9 +10,9 @@ import (
 )
 
 type SSOPublicConfig struct {
-	GoogleClientID   string `json:"google_client_id"`
+	GoogleClientID    string `json:"google_client_id"`
 	GoogleRedirectURI string `json:"google_redirect_uri"`
-	MetaAppID        string `json:"meta_app_id"`
+	MetaAppID         string `json:"meta_app_id"`
 }
 
 type AuthHandler struct {
@@ -43,10 +43,13 @@ func NewAuthHandler(
 }
 
 // HandleRegister maneja el endpoint POST /auth/register (UC-01)
+// El frontend DEBE enviar el campo "role" con uno de los valores válidos:
+// INQUILINO | PROPIETARIO | AGENTE | PROVEEDOR | INTERESADO
 func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
+		Role     string `json:"role"` // ← NUEVO: requerido desde el frontend
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -57,12 +60,17 @@ func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	cmd := application.RegisterUserCommand{
 		Email:    req.Email,
 		Password: req.Password,
+		Role:     req.Role, // ← se propaga al use case
 	}
 
 	resp, err := h.registerUC.Execute(r.Context(), cmd)
 	if err != nil {
 		if errors.Is(err, application.ErrEmailAlreadyExists) {
 			h.respondWithError(w, http.StatusConflict, err.Error()) // 409
+			return
+		}
+		if errors.Is(err, application.ErrInvalidRole) {
+			h.respondWithError(w, http.StatusBadRequest, err.Error()) // 400
 			return
 		}
 		h.respondWithError(w, http.StatusUnprocessableEntity, err.Error()) // 422
@@ -136,7 +144,7 @@ func (h *AuthHandler) HandleVerifyEmail(w http.ResponseWriter, r *http.Request) 
 	h.respondWithJSON(w, http.StatusOK, resp)
 }
 
-// 🚀 4. HandleGoogleLogin maneja el endpoint POST /auth/sso/google (UC-04)
+// HandleGoogleLogin maneja el endpoint POST /auth/sso/google (UC-04)
 func (h *AuthHandler) HandleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Code string `json:"code"`
@@ -155,7 +163,6 @@ func (h *AuthHandler) HandleGoogleLogin(w http.ResponseWriter, r *http.Request) 
 
 	resp, err := h.loginGoogleUC.Execute(r.Context(), cmd)
 	if err != nil {
-		// Si la cuenta local no está verificada, tiramos un Conflict (409) o Forbidden (403)
 		if errors.Is(err, application.ErrLinkVerificationRequired) {
 			h.respondWithError(w, http.StatusConflict, err.Error())
 			return
@@ -167,10 +174,10 @@ func (h *AuthHandler) HandleGoogleLogin(w http.ResponseWriter, r *http.Request) 
 	h.respondWithJSON(w, http.StatusOK, resp)
 }
 
-// 🚀 5. HandleMetaLogin maneja el endpoint POST /auth/sso/meta (UC-05)
+// HandleMetaLogin maneja el endpoint POST /auth/sso/meta (UC-05)
 func (h *AuthHandler) HandleMetaLogin(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		AccessToken string `json:"access_token"` // Mapeado estricto al DTO que genera Meta Tools
+		AccessToken string `json:"access_token"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -198,13 +205,10 @@ func (h *AuthHandler) HandleMetaLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleSSOConfig: GET /api/v1/auth/sso/config
-// Devuelve los valores públicos de OAuth que el frontend necesita para iniciar
-// los flujos de Google y Meta sin hardcodear credenciales en el cliente.
 func (h *AuthHandler) HandleSSOConfig(w http.ResponseWriter, r *http.Request) {
 	h.respondWithJSON(w, http.StatusOK, h.ssoConfig)
 }
 
-// Helper interno para reutilizar la extracción de IP
 func (h *AuthHandler) extractClientIP(r *http.Request) string {
 	clientIP := r.RemoteAddr
 	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
@@ -213,7 +217,6 @@ func (h *AuthHandler) extractClientIP(r *http.Request) string {
 	return clientIP
 }
 
-// Helpers globales de respuesta
 func (h *AuthHandler) respondWithError(w http.ResponseWriter, code int, msg string) {
 	h.respondWithJSON(w, code, map[string]string{"error": msg})
 }
