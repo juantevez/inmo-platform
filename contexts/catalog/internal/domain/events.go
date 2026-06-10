@@ -214,7 +214,7 @@ type PropertyMediaAdded struct {
 	Region     string   `json:"region"`
 }
 
-func NewPropertyMediaAdded(media *domain.PropertyMedia, ownerID, bucketName, region string) PropertyMediaAdded {
+func NewPropertyMediaAdded(media *PropertyMedia, ownerID, bucketName, region string) PropertyMediaAdded {
 	s3Key := extractS3Key(media.URL())
 	return PropertyMediaAdded{
 		BaseDomainEvent: ddd.NewBaseDomainEvent(
