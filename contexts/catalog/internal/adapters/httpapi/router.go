@@ -24,6 +24,7 @@ func NewRouter(propertyHandler *PropertyHandler, profileHandler *ProfileHandler,
 	mux.HandleFunc("POST /api/v1/properties/{id}/media/upload-url", mediaHandler.HandleGenerateUploadURL)
 	mux.HandleFunc("POST /api/v1/properties/{id}/media", mediaHandler.HandleAddMedia)
 	mux.HandleFunc("GET /api/v1/properties/{id}/media", mediaHandler.HandleListMedia)
+	mux.HandleFunc("DELETE /api/v1/properties/{id}/media/{mediaID}", mediaHandler.HandleDeleteMedia)
 
 	// Perfiles de negocio
 	mux.HandleFunc("GET /api/v1/catalog/profiles/me", profileHandler.HandleGetProfile)

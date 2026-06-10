@@ -12,17 +12,20 @@ type MediaHandler struct {
 	generateUploadURL *application.GenerateUploadURLUseCase
 	addMedia          *application.AddPropertyMediaUseCase
 	listMedia         *application.ListPropertyMediaUseCase
+	deleteMedia       *application.DeletePropertyMediaUseCase
 }
 
 func NewMediaHandler(
 	generateUploadURL *application.GenerateUploadURLUseCase,
 	addMedia *application.AddPropertyMediaUseCase,
 	listMedia *application.ListPropertyMediaUseCase,
+	deleteMedia *application.DeletePropertyMediaUseCase,
 ) *MediaHandler {
 	return &MediaHandler{
 		generateUploadURL: generateUploadURL,
 		addMedia:          addMedia,
 		listMedia:         listMedia,
+		deleteMedia:       deleteMedia,
 	}
 }
 
@@ -109,6 +112,26 @@ func (h *MediaHandler) HandleListMedia(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(items)
+}
+
+// HandleDeleteMedia: DELETE /api/v1/properties/{id}/media/{mediaID}
+func (h *MediaHandler) HandleDeleteMedia(w http.ResponseWriter, r *http.Request) {
+	ownerID := r.Header.Get("X-User-Id")
+	if ownerID == "" {
+		h.errResp(w, apperr.NewBadRequest("identidad del usuario no provista por el gateway", nil))
+		return
+	}
+
+	if err := h.deleteMedia.Execute(r.Context(), application.DeleteMediaCommand{
+		PropertyID:  r.PathValue("id"),
+		MediaID:     r.PathValue("mediaID"),
+		RequesterID: ownerID,
+	}); err != nil {
+		h.errResp(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *MediaHandler) errResp(w http.ResponseWriter, err error) {

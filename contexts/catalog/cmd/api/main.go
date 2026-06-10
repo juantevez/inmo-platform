@@ -135,11 +135,12 @@ func main() {
 	//addMediaUseCase := application.NewAddPropertyMediaUseCase(propertyRepo, mediaRepo)
 	addMediaUseCase := application.NewAddPropertyMediaUseCase(propertyRepo, mediaRepo, dbPool)
 	generateURLUseCase := application.NewGenerateUploadURLUseCase(propertyRepo, storageProvider)
+	deleteMediaUseCase := application.NewDeletePropertyMediaUseCase(propertyRepo, mediaRepo)
 
 	// 7. Handlers HTTP
 	propertyHandler := httpapi.NewPropertyHandler(publishUseCase, changeStateUseCase, listUseCase, quoteUseCase, updateUseCase)
 	profileHandler := httpapi.NewProfileHandler(profileUseCase)
-	mediaHandler := httpapi.NewMediaHandler(generateURLUseCase, addMediaUseCase, listMediaUseCase)
+	mediaHandler := httpapi.NewMediaHandler(generateURLUseCase, addMediaUseCase, listMediaUseCase, deleteMediaUseCase)
 
 	checker := health.NewChecker(dbPool, natsConn.NC, outboxStatus, contractSubStatus, reservationSubStatus)
 	router := httpapi.NewRouter(propertyHandler, profileHandler, mediaHandler, checker)
