@@ -17,7 +17,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	"inmo.platform/contexts/maintenance/internal/adapters/httpapi"
-	catalogNats "inmo.platform/contexts/maintenance/internal/adapters/nats"
+	maintenanceNats "inmo.platform/contexts/maintenance/internal/adapters/nats"
 	"inmo.platform/contexts/maintenance/internal/adapters/postgres"
 	"inmo.platform/contexts/maintenance/internal/application"
 )
@@ -66,7 +66,7 @@ func main() {
 	}
 	log.Println("🛰️ Conexión a NATS JetStream establecida con éxito para Mantenimiento")
 
-	// Asegurar que el stream "maintenance" existe para los eventos que este módulo publica
+	// Asegurar stream "maintenance" para eventos que este módulo publica
 	initCtx, initCancel := context.WithTimeout(ctx, 5*time.Second)
 	_, err = js.CreateOrUpdateStream(initCtx, jetstream.StreamConfig{
 		Name:      "maintenance",
@@ -77,7 +77,23 @@ func main() {
 	})
 	initCancel()
 	if err != nil {
-		log.Printf("⚠️ No se pudo crear/validar el stream 'maintenance': %v", err)
+		log.Printf("⚠️  No se pudo crear/validar el stream 'maintenance': %v", err)
+	}
+
+	// Asegurar stream "auth" para poder consumir auth.user.created
+	// auth-identity lo crea al arrancar, pero lo declaramos acá también
+	// para que maintenance pueda arrancar independientemente del orden de inicio.
+	initCtx2, initCancel2 := context.WithTimeout(ctx, 5*time.Second)
+	_, err = js.CreateOrUpdateStream(initCtx2, jetstream.StreamConfig{
+		Name:      "auth",
+		Subjects:  []string{"auth.user.*"},
+		Retention: jetstream.LimitsPolicy,
+		MaxAge:    7 * 24 * time.Hour,
+		Storage:   jetstream.FileStorage,
+	})
+	initCancel2()
+	if err != nil {
+		log.Printf("⚠️  No se pudo crear/validar el stream 'auth': %v", err)
 	}
 
 	// =========================================================================
@@ -85,18 +101,14 @@ func main() {
 	// =========================================================================
 	ticketRepo := postgres.NewPostgresTicketRepository(db)
 	providerRepo := postgres.NewPostgresProviderRepository(db)
-	projectionRepo := postgres.NewPostgresProjectionRepository(db) // NUEVO
+	projectionRepo := postgres.NewPostgresProjectionRepository(db)
+	inquilinoRepo := postgres.NewPostgresInquilinoProjectionRepository(db) // NUEVO
 
 	// =========================================================================
 	// 4. Servicios
 	// =========================================================================
-
-	// CatalogService usa proyección local para PropertyExists
-	// y NATS request/reply para GetPropertyLocation.
-	// En desarrollo local sin catalog, usar el Stub.
-	var catalogService = catalogNats.NewStubCatalogService(projectionRepo)
-	// Para producción con catalog corriendo:
-	// var catalogService = catalogNats.NewNatsCatalogService(nc, projectionRepo)
+	catalogService := maintenanceNats.NewStubCatalogService(projectionRepo)
+	// Producción: maintenanceNats.NewNatsCatalogService(nc, projectionRepo)
 
 	eventDispatcher := postgres.NewStubEventDispatcher()
 
@@ -136,23 +148,22 @@ func main() {
 	httpapi.MapTicketRoutes(mux, ticketHandler, providerHandler)
 
 	// =========================================================================
-	// 8. Goroutines de background con WaitGroup
+	// 8. Goroutines de background
 	// =========================================================================
 	var wg sync.WaitGroup
 
-	// Outbox Worker: publica eventos PENDING a NATS
+	// Outbox Worker
 	outboxWorker := postgres.NewOutboxWorker(db, js)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		outboxWorker.Start(ctx, 10*time.Second)
-		log.Println("⚙️ [MAINTENANCE OUTBOX] Worker detenido.")
+		log.Println("⚙️  [MAINTENANCE OUTBOX] Worker detenido.")
 	}()
-	log.Println("⚙️ [MAINTENANCE OUTBOX] Worker iniciado. Escaneando cada 10s...")
+	log.Println("⚙️  [MAINTENANCE OUTBOX] Worker iniciado. Escaneando cada 10s...")
 
-	// CatalogSubscriber: consume catalog.property.published y state_changed
-	// para mantener la proyección local sincronizada
-	catalogSubscriber := catalogNats.NewCatalogSubscriber(js, projectionRepo)
+	// CatalogSubscriber: catalog.property.published + state_changed → property_projections
+	catalogSubscriber := maintenanceNats.NewCatalogSubscriber(js, projectionRepo)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -162,6 +173,18 @@ func main() {
 		log.Println("📡 [MAINTENANCE CATALOG SUB] Subscriber detenido.")
 	}()
 	log.Println("📡 [MAINTENANCE CATALOG SUB] Subscriber iniciado. Escuchando catalog.property.*...")
+
+	// AuthSubscriber: auth.user.created (role=INQUILINO) → inquilino_projections
+	authSubscriber := maintenanceNats.NewAuthSubscriber(js, inquilinoRepo) // NUEVO
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := authSubscriber.StartConsume(ctx); err != nil {
+			log.Printf("❌ [MAINTENANCE AUTH SUB] Error crítico: %v", err)
+		}
+		log.Println("🔐 [MAINTENANCE AUTH SUB] Subscriber detenido.")
+	}()
+	log.Println("🔐 [MAINTENANCE AUTH SUB] Subscriber iniciado. Escuchando auth.user.created...")
 
 	// =========================================================================
 	// 9. Servidor HTTP
@@ -174,7 +197,6 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 	}
 
-	// Manejo de señales OS para apagado graceful
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
@@ -193,14 +215,13 @@ func main() {
 		log.Printf("[MAINTENANCE] Señal recibida (%s), iniciando apagado graceful...", sig)
 	}
 
-	// Apagado graceful: primero HTTP, luego goroutines
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Printf("[MAINTENANCE] Error durante el apagado del servidor HTTP: %v", err)
 	}
 
-	cancel()  // señal para que las goroutines terminen
-	wg.Wait() // esperamos que outbox y subscriber terminen limpio
+	cancel()
+	wg.Wait()
 	log.Println("[MAINTENANCE] Módulo apagado correctamente.")
 }

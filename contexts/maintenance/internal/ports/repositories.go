@@ -24,20 +24,26 @@ type ProviderRepository interface {
 }
 
 // PropertyProjectionRepository gestiona la tabla espejo de propiedades en maintenance_db.
-//
-// Esta proyección se mantiene sincronizada vía eventos NATS de catalog.
-// No hay FK física entre property_projections y las tablas de catalog —
-// la relación es lógica a nivel de aplicación.
 type PropertyProjectionRepository interface {
-	// Upsert inserta o actualiza la proyección cuando llega un evento de catalog.
-	// Si la propiedad ya existe (re-publicación), actualiza todos los campos.
 	Upsert(ctx context.Context, projection *domain.PropertyProjection) error
-
-	// FindByID recupera la proyección local para validar si existe la propiedad
-	// antes de crear un ticket.
 	FindByID(ctx context.Context, propertyID string) (*domain.PropertyProjection, error)
-
-	// UpdateState actualiza solo el campo state cuando llega catalog.property.state_changed.
-	// Más eficiente que un Upsert completo para cambios de estado frecuentes.
 	UpdateState(ctx context.Context, propertyID, newState string) error
+}
+
+// InquilinoProjectionRepository gestiona la tabla espejo de inquilinos en maintenance_db.
+//
+// Se sincroniza via el evento auth.user.created (role = INQUILINO).
+// Permite que maintenance valide si quien abre un ticket es un inquilino activo
+// sin consultar auth_db en cada operación.
+type InquilinoProjectionRepository interface {
+	// Upsert inserta o actualiza la proyección cuando llega auth.user.created.
+	// Si el inquilino ya existe (reenvío del evento), actualiza email y synced_at.
+	Upsert(ctx context.Context, projection *domain.InquilinoProjection) error
+
+	// FindByUserID recupera la proyección por user_id.
+	// Retorna nil, nil si no existe — el inquilino no está registrado aún.
+	FindByUserID(ctx context.Context, userID string) (*domain.InquilinoProjection, error)
+
+	// UpdateStatus actualiza el status cuando llega auth.user.suspended o auth.user.activated.
+	UpdateStatus(ctx context.Context, userID, newStatus string) error
 }
