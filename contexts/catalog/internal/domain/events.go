@@ -81,6 +81,106 @@ func NewPropertyUpdated(p *Property) PropertyUpdated {
 	}
 }
 
+// PropertyDetailsUpdated se dispara cuando el propietario modifica título, descripción o precio.
+type PropertyDetailsUpdated struct {
+	ddd.BaseDomainEvent
+	OldTitle       string  `json:"old_title"`
+	OldDescription string  `json:"old_description"`
+	OldPrice       float64 `json:"old_price"`
+	NewTitle       string  `json:"new_title"`
+	NewDescription string  `json:"new_description"`
+	NewPrice       float64 `json:"new_price"`
+}
+
+func NewPropertyDetailsUpdated(propertyID, oldTitle, oldDescription string, oldPrice Price, newTitle, newDescription string, newPrice Price) PropertyDetailsUpdated {
+	return PropertyDetailsUpdated{
+		BaseDomainEvent: ddd.NewBaseDomainEvent(
+			nextUUID(),
+			propertyID,
+			"catalog.property.details_updated",
+		),
+		OldTitle:       oldTitle,
+		OldDescription: oldDescription,
+		OldPrice:       oldPrice.Amount(),
+		NewTitle:       newTitle,
+		NewDescription: newDescription,
+		NewPrice:       newPrice.Amount(),
+	}
+}
+
+// PropertyLocationUpdated se dispara cuando el propietario modifica la ubicación.
+type PropertyLocationUpdated struct {
+	ddd.BaseDomainEvent
+	OldLatitude  float64 `json:"old_latitude"`
+	OldLongitude float64 `json:"old_longitude"`
+	OldAddress   string  `json:"old_address"`
+	NewLatitude  float64 `json:"new_latitude"`
+	NewLongitude float64 `json:"new_longitude"`
+	NewAddress   string  `json:"new_address"`
+}
+
+func NewPropertyLocationUpdated(propertyID string, oldLocation, newLocation Location) PropertyLocationUpdated {
+	return PropertyLocationUpdated{
+		BaseDomainEvent: ddd.NewBaseDomainEvent(
+			nextUUID(),
+			propertyID,
+			"catalog.property.location_updated",
+		),
+		OldLatitude:  oldLocation.Latitude(),
+		OldLongitude: oldLocation.Longitude(),
+		OldAddress:   oldLocation.Address(),
+		NewLatitude:  newLocation.Latitude(),
+		NewLongitude: newLocation.Longitude(),
+		NewAddress:   newLocation.Address(),
+	}
+}
+
+// PropertyPetPolicyUpdated se dispara cuando el propietario modifica la política de mascotas.
+type PropertyPetPolicyUpdated struct {
+	ddd.BaseDomainEvent
+	OldPolicy PetPolicy `json:"old_policy"`
+	NewPolicy PetPolicy `json:"new_policy"`
+}
+
+func NewPropertyPetPolicyUpdated(propertyID string, oldPolicy, newPolicy PetPolicy) PropertyPetPolicyUpdated {
+	return PropertyPetPolicyUpdated{
+		BaseDomainEvent: ddd.NewBaseDomainEvent(
+			nextUUID(),
+			propertyID,
+			"catalog.property.pet_policy_updated",
+		),
+		OldPolicy: oldPolicy,
+		NewPolicy: newPolicy,
+	}
+}
+
+// PropertyTempConfigUpdated se dispara cuando el propietario modifica la configuración temporal.
+type PropertyTempConfigUpdated struct {
+	ddd.BaseDomainEvent
+	Snapshot PropertySnapshot `json:"snapshot"`
+}
+
+func NewPropertyTempConfigUpdated(propertyID string, oldConfig, newConfig TempConfig) PropertyTempConfigUpdated {
+	return PropertyTempConfigUpdated{
+		BaseDomainEvent: ddd.NewBaseDomainEvent(
+			nextUUID(),
+			propertyID,
+			"catalog.property.temp_config_updated",
+		),
+		Snapshot: PropertySnapshot{
+			OperationType:   "TEMP",
+			NightPrice:      newConfig.NightPrice(),
+			CleaningFee:     newConfig.CleaningFee(),
+			SecurityDeposit: newConfig.SecurityDeposit(),
+			MinNights:       newConfig.MinNights(),
+			MaxNights:       newConfig.MaxNights(),
+			CheckInTime:     newConfig.CheckInTime(),
+			CheckOutTime:    newConfig.CheckOutTime(),
+			PricingRules:    newConfig.PricingRules(),
+		},
+	}
+}
+
 // PropertyStateChanged se dispara ante cualquier transición en la máquina de estados.
 type PropertyStateChanged struct {
 	ddd.BaseDomainEvent

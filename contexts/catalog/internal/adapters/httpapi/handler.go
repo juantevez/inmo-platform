@@ -17,6 +17,7 @@ type PropertyHandler struct {
 	changeStateUC *application.ChangePropertyStateUseCase
 	listUC        *application.ListPropertiesUseCase
 	quoteUC       *application.QuotePropertyUseCase
+	updateUC      *application.UpdatePropertyUseCase
 }
 
 func NewPropertyHandler(
@@ -24,12 +25,14 @@ func NewPropertyHandler(
 	changeStateUC *application.ChangePropertyStateUseCase,
 	listUC *application.ListPropertiesUseCase,
 	quoteUC *application.QuotePropertyUseCase,
+	updateUC *application.UpdatePropertyUseCase,
 ) *PropertyHandler {
 	return &PropertyHandler{
 		publishUC:     publishUC,
 		changeStateUC: changeStateUC,
 		listUC:        listUC,
 		quoteUC:       quoteUC,
+		updateUC:      updateUC,
 	}
 }
 
@@ -194,6 +197,75 @@ func (h *PropertyHandler) Quote(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// Request para actualizar propiedad — owner_id lo provee el gateway vía X-User-Id
+type UpdateRequest struct {
+	Title       *string  `json:"title,omitempty"`
+	Description *string  `json:"description,omitempty"`
+	Price       *float64 `json:"price,omitempty"`
+	Currency    *string  `json:"currency,omitempty"`
+	Latitude    *float64 `json:"latitude,omitempty"`
+	Longitude   *float64 `json:"longitude,omitempty"`
+	Address     *string  `json:"address,omitempty"`
+	PetPolicy   *string  `json:"pet_policy,omitempty"`
+	// Campos de alquiler temporario
+	CheckInTime     *string               `json:"check_in_time,omitempty"`
+	CheckOutTime    *string               `json:"check_out_time,omitempty"`
+	MinNights       *int                  `json:"min_nights,omitempty"`
+	MaxNights       *int                  `json:"max_nights,omitempty"`
+	NightPrice      *float64              `json:"night_price,omitempty"`
+	CleaningFee     *float64              `json:"cleaning_fee,omitempty"`
+	SecurityDeposit *float64              `json:"security_deposit,omitempty"`
+	PricingRules    []domain.PricingRule  `json:"pricing_rules,omitempty"`
+}
+
+func (h *PropertyHandler) Update(w http.ResponseWriter, r *http.Request) {
+	ownerID := r.Header.Get("X-User-Id")
+	if ownerID == "" {
+		h.errorResponse(w, apperr.NewBadRequest("identidad del usuario no provista por el gateway", nil))
+		return
+	}
+
+	propertyID := r.PathValue("id")
+	if propertyID == "" {
+		h.errorResponse(w, apperr.NewBadRequest("el ID de la propiedad es requerido", nil))
+		return
+	}
+
+	var req UpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.errorResponse(w, apperr.NewBadRequest("JSON inválido", err))
+		return
+	}
+
+	dto := application.UpdatePropertyDTO{
+		Title:           req.Title,
+		Description:     req.Description,
+		Price:           req.Price,
+		Currency:        req.Currency,
+		Latitude:        req.Latitude,
+		Longitude:       req.Longitude,
+		Address:         req.Address,
+		PetPolicy:       req.PetPolicy,
+		CheckInTime:     req.CheckInTime,
+		CheckOutTime:    req.CheckOutTime,
+		MinNights:       req.MinNights,
+		MaxNights:       req.MaxNights,
+		NightPrice:      req.NightPrice,
+		CleaningFee:     req.CleaningFee,
+		SecurityDeposit: req.SecurityDeposit,
+		PricingRules:    req.PricingRules,
+	}
+
+	if err := h.updateUC.Execute(r.Context(), propertyID, dto); err != nil {
+		h.errorResponse(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`{"status": "success", "message": "propiedad actualizada exitosamente"}`))
 }
 
 // Helper para unificar las respuestas de error usando nuestro Shared Kernel
