@@ -16,6 +16,7 @@ func NewRouter(propertyHandler *PropertyHandler, profileHandler *ProfileHandler,
 	// Rutas de Propiedades
 	mux.HandleFunc("GET /api/v1/properties", propertyHandler.List)
 	mux.HandleFunc("POST /api/v1/properties", propertyHandler.Publish)
+	mux.HandleFunc("PUT /api/v1/properties/{id}", propertyHandler.Update)
 	mux.HandleFunc("POST /api/v1/properties/{id}/reserve", propertyHandler.Reserve)
 	mux.HandleFunc("POST /api/v1/properties/{id}/quote", propertyHandler.Quote)
 

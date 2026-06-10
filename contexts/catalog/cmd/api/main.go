@@ -129,13 +129,14 @@ func main() {
 	changeStateUseCase := application.NewChangePropertyStateUseCase(propertyRepo, eventPublisher)
 	listUseCase := application.NewListPropertiesUseCase(propertyRepo)
 	quoteUseCase := application.NewQuotePropertyUseCase(propertyRepo, blockedDatesRepo)
+	updateUseCase := application.NewUpdatePropertyUseCase(dbPool, propertyRepo)
 	profileUseCase := application.NewCreateProfileUseCase(profileRepo)
 	listMediaUseCase := application.NewListPropertyMediaUseCase(mediaRepo)
 	addMediaUseCase := application.NewAddPropertyMediaUseCase(propertyRepo, mediaRepo)
 	generateURLUseCase := application.NewGenerateUploadURLUseCase(propertyRepo, storageProvider)
 
 	// 7. Handlers HTTP
-	propertyHandler := httpapi.NewPropertyHandler(publishUseCase, changeStateUseCase, listUseCase, quoteUseCase)
+	propertyHandler := httpapi.NewPropertyHandler(publishUseCase, changeStateUseCase, listUseCase, quoteUseCase, updateUseCase)
 	profileHandler := httpapi.NewProfileHandler(profileUseCase)
 	mediaHandler := httpapi.NewMediaHandler(generateURLUseCase, addMediaUseCase, listMediaUseCase)
 

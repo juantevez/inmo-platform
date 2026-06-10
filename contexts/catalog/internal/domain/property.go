@@ -134,6 +134,75 @@ func (p *Property) SetTempConfig(cfg TempConfig) {
 	p.tempConfig = cfg
 }
 
+// UpdateDetails permite modificar título, descripción y precio de la propiedad.
+// Solo se puede editar si la propiedad está AVAILABLE o UNDER_REPAIR.
+func (p *Property) UpdateDetails(title, description string, price Price) error {
+	if p.state == StateReserved || p.state == StateClosed {
+		return apperr.NewPreconditionFailed("no se pueden editar los detalles de una propiedad reservada o cerrada", nil)
+	}
+	if title == "" {
+		return apperr.NewBadRequest("el título de la publicación no puede estar vacío", nil)
+	}
+
+	oldTitle := p.title
+	oldDescription := p.description
+	oldPrice := p.price
+
+	p.title = title
+	p.description = description
+	p.price = price
+
+	p.RecordEvent(NewPropertyDetailsUpdated(p.id, oldTitle, oldDescription, oldPrice, title, description, price))
+	return nil
+}
+
+// UpdateLocation permite modificar la ubicación de la propiedad.
+func (p *Property) UpdateLocation(latitude, longitude float64, address string) error {
+	if p.state == StateReserved || p.state == StateClosed {
+		return apperr.NewPreconditionFailed("no se pueden editar los detalles de una propiedad reservada o cerrada", nil)
+	}
+
+	oldLocation := p.location
+	newLocation, err := NewLocation(latitude, longitude, address)
+	if err != nil {
+		return err
+	}
+
+	p.location = newLocation
+	p.RecordEvent(NewPropertyLocationUpdated(p.id, oldLocation, newLocation))
+	return nil
+}
+
+// UpdatePetPolicy permite modificar la política de mascotas.
+func (p *Property) UpdatePetPolicy(policy PetPolicy) error {
+	if policy != PetPolicyAllowed && policy != PetPolicyNotAllowed && policy != PetPolicySmallOnly {
+		return apperr.NewBadRequest("política de mascotas inválida: debe ser ALLOWED, NOT_ALLOWED o SMALL_ONLY", nil)
+	}
+	if p.state == StateReserved || p.state == StateClosed {
+		return apperr.NewPreconditionFailed("no se pueden editar los detalles de una propiedad reservada o cerrada", nil)
+	}
+
+	oldPolicy := p.petPolicy
+	p.petPolicy = policy
+	p.RecordEvent(NewPropertyPetPolicyUpdated(p.id, oldPolicy, policy))
+	return nil
+}
+
+// UpdateTempConfig permite modificar la configuración de alquiler temporario.
+func (p *Property) UpdateTempConfig(cfg TempConfig) error {
+	if p.operationType != OperationTemp {
+		return apperr.NewPreconditionFailed("solo se puede actualizar la configuración temporal para propiedades de tipo TEMP", nil)
+	}
+	if p.state == StateReserved || p.state == StateClosed {
+		return apperr.NewPreconditionFailed("no se pueden editar los detalles de una propiedad reservada o cerrada", nil)
+	}
+
+	oldConfig := p.tempConfig
+	p.tempConfig = cfg
+	p.RecordEvent(NewPropertyTempConfigUpdated(p.id, oldConfig, cfg))
+	return nil
+}
+
 // --- Getters limpios ---
 
 func (p *Property) ID() string                   { return p.id }
