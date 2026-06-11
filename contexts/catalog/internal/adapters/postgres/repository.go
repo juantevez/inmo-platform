@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"inmo.platform/contexts/catalog/internal/domain"
 	"inmo.platform/contexts/catalog/internal/ports"
 	"inmo.platform/shared/pkg/apperr"
-	"strings"
-	"time"
 )
 
 type PropertyRepository struct {
@@ -73,10 +74,10 @@ func (r *PropertyRepository) FindByID(ctx context.Context, id string) (*domain.P
 
 	var (
 		propID, ownerID, title, description, currency, state, address, opType, petPolicy string
-		priceAmount, lat, lng                                                             float64
+		priceAmount, lat, lng                                                            float64
 		amenitiesRaw, pricingRulesRaw                                                    []byte
-		checkInTime, checkOutTime                                                         string
-		minNights, maxNights                                                              int
+		checkInTime, checkOutTime                                                        string
+		minNights, maxNights                                                             int
 		nightPrice, cleaningFee, securityDeposit                                         sql.NullFloat64
 	)
 
@@ -159,10 +160,10 @@ func (r *PropertyRepository) FindAll(ctx context.Context, f ports.ListFilters) (
 	for rows.Next() {
 		var (
 			propID, ownerID, title, description, currency, state, address, opType, petPolicy string
-			priceAmount, lat, lng                                                             float64
+			priceAmount, lat, lng                                                            float64
 			amenitiesRaw, pricingRulesRaw                                                    []byte
-			checkInTime, checkOutTime                                                         string
-			minNights, maxNights                                                              int
+			checkInTime, checkOutTime                                                        string
+			minNights, maxNights                                                             int
 			nightPrice, cleaningFee, securityDeposit                                         sql.NullFloat64
 		)
 		if err := rows.Scan(
@@ -238,6 +239,12 @@ func buildListWhere(f ports.ListFilters) (string, []interface{}) {
 	if f.MaxPrice > 0 {
 		clauses = append(clauses, fmt.Sprintf("price <= $%d", n))
 		args = append(args, f.MaxPrice)
+		n++
+	}
+
+	if f.OwnerID != "" {
+		clauses = append(clauses, fmt.Sprintf("owner_id = $%d", n))
+		args = append(args, f.OwnerID)
 		n++
 	}
 

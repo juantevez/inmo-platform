@@ -25,6 +25,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.36.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.42.3 // indirect
 	github.com/aws/smithy-go v1.26.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/compress v1.18.5 // indirect
 	github.com/nats-io/nkeys v0.4.15 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect

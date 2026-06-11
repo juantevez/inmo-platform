@@ -11,6 +11,7 @@ type ListFilters struct {
 	State         string
 	OperationType string
 	PetPolicy     string
+	OwnerID       string
 	MinPrice      float64
 	MaxPrice      float64
 	Limit         int

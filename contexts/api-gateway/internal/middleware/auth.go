@@ -44,40 +44,76 @@ func AuthValidator(jwtSecret string) func(http.Handler) http.Handler {
 				return
 			}
 
+			// Inyectar identidad y permisos como headers para los backends.
+			// Los servicios downstream leen estos headers en lugar de parsear
+			// el JWT nuevamente — un solo punto de validación en el gateway.
+			roles, _ := claims["roles"].([]interface{})
+			permissions, _ := claims["permissions"].([]interface{})
+
 			r.Header.Set("X-User-Id", userID)
+			r.Header.Set("X-User-Roles", joinClaims(roles))
+			r.Header.Set("X-Permissions", joinClaims(permissions))
+
 			next.ServeHTTP(w, r)
 		})
 	}
 }
 
-// 🔒 Middleware complementario para validar roles específicos en rutas puntuales del Gateway
+// joinClaims convierte un slice de interface{} (como vienen los arrays del JWT)
+// a un string separado por comas: ["property:create","property:read"] → "property:create,property:read"
+func joinClaims(vals []interface{}) string {
+	parts := make([]string, 0, len(vals))
+	for _, v := range vals {
+		if s, ok := v.(string); ok && s != "" {
+			parts = append(parts, s)
+		}
+	}
+	return strings.Join(parts, ",")
+}
+
+// RequireRole middleware complementario para validar roles específicos.
+// Funciona con el header X-User-Roles inyectado por AuthValidator.
 func RequireRole(requiredRole string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			rolesHeader := r.Header.Get("X-User-Roles")
-
-			// Si el header está vacío, el usuario directamente no pasó por AuthValidator o no tiene roles
 			if rolesHeader == "" {
-				http.Error(w, `{"error": "Prohibido", "message": "No tenés los permisos necesarios"}`, http.StatusForbidden)
+				http.Error(w, `{"error":"Prohibido","message":"No tenés los permisos necesarios"}`, http.StatusForbidden)
 				return
 			}
 
-			// Validamos si el rol requerido se encuentra en la lista
-			roles := strings.Split(rolesHeader, ",")
-			hasRole := false
-			for _, role := range roles {
+			for _, role := range strings.Split(rolesHeader, ",") {
 				if strings.TrimSpace(role) == requiredRole {
-					hasRole = true
-					break
+					next.ServeHTTP(w, r)
+					return
 				}
 			}
 
-			if !hasRole {
-				http.Error(w, `{"error": "Prohibido", "message": "Se requiere el rol de `+requiredRole+` para realizar esta acción"}`, http.StatusForbidden)
+			http.Error(w, `{"error":"Prohibido","message":"Se requiere el rol de `+requiredRole+` para realizar esta acción"}`, http.StatusForbidden)
+		})
+	}
+}
+
+// RequirePermission middleware para validar permisos granulares.
+// Funciona con el header X-Permissions inyectado por AuthValidator.
+// Usar en lugar de RequireRole para control más fino (ej: "property:create").
+func RequirePermission(requiredPermission string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			permsHeader := r.Header.Get("X-Permissions")
+			if permsHeader == "" {
+				http.Error(w, `{"error":"Prohibido","message":"Sin permisos asignados"}`, http.StatusForbidden)
 				return
 			}
 
-			next.ServeHTTP(w, r)
+			for _, perm := range strings.Split(permsHeader, ",") {
+				if strings.TrimSpace(perm) == requiredPermission {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+
+			http.Error(w, `{"error":"Prohibido","message":"Permiso requerido: `+requiredPermission+`"}`, http.StatusForbidden)
 		})
 	}
 }

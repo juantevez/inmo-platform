@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"inmo.platform/contexts/catalog/internal/application"
 	"inmo.platform/contexts/catalog/internal/domain"
 	"inmo.platform/contexts/catalog/internal/ports"
@@ -49,15 +50,15 @@ type PublishRequest struct {
 	OperationType string  `json:"operation_type"`
 	PetPolicy     string  `json:"pet_policy"`
 	// Campos de alquiler temporario
-	Amenities       []domain.Amenity      `json:"amenities"`
-	CheckInTime     string                `json:"check_in_time"`
-	CheckOutTime    string                `json:"check_out_time"`
-	MinNights       int                   `json:"min_nights"`
-	MaxNights       int                   `json:"max_nights"`
-	NightPrice      float64               `json:"night_price"`
-	CleaningFee     float64               `json:"cleaning_fee"`
-	SecurityDeposit float64               `json:"security_deposit"`
-	PricingRules    []domain.PricingRule  `json:"pricing_rules"`
+	Amenities       []domain.Amenity     `json:"amenities"`
+	CheckInTime     string               `json:"check_in_time"`
+	CheckOutTime    string               `json:"check_out_time"`
+	MinNights       int                  `json:"min_nights"`
+	MaxNights       int                  `json:"max_nights"`
+	NightPrice      float64              `json:"night_price"`
+	CleaningFee     float64              `json:"cleaning_fee"`
+	SecurityDeposit float64              `json:"security_deposit"`
+	PricingRules    []domain.PricingRule `json:"pricing_rules"`
 }
 
 func (h *PropertyHandler) Publish(w http.ResponseWriter, r *http.Request) {
@@ -71,6 +72,9 @@ func (h *PropertyHandler) Publish(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.errorResponse(w, apperr.NewBadRequest("JSON inválido", err))
 		return
+	}
+	if req.ID == "" {
+		req.ID = uuid.New().String()
 	}
 
 	dto := application.PublishPropertyDTO{
@@ -130,6 +134,7 @@ func (h *PropertyHandler) List(w http.ResponseWriter, r *http.Request) {
 		State:         q.Get("status"),
 		OperationType: q.Get("operation"),
 		PetPolicy:     q.Get("pets"),
+		OwnerID:       q.Get("owner_id"),
 		Limit:         parseIntQuery(q.Get("limit"), 50),
 		Offset:        parseIntQuery(q.Get("offset"), 0),
 	}
@@ -210,14 +215,14 @@ type UpdateRequest struct {
 	Address     *string  `json:"address,omitempty"`
 	PetPolicy   *string  `json:"pet_policy,omitempty"`
 	// Campos de alquiler temporario
-	CheckInTime     *string               `json:"check_in_time,omitempty"`
-	CheckOutTime    *string               `json:"check_out_time,omitempty"`
-	MinNights       *int                  `json:"min_nights,omitempty"`
-	MaxNights       *int                  `json:"max_nights,omitempty"`
-	NightPrice      *float64              `json:"night_price,omitempty"`
-	CleaningFee     *float64              `json:"cleaning_fee,omitempty"`
-	SecurityDeposit *float64              `json:"security_deposit,omitempty"`
-	PricingRules    []domain.PricingRule  `json:"pricing_rules,omitempty"`
+	CheckInTime     *string              `json:"check_in_time,omitempty"`
+	CheckOutTime    *string              `json:"check_out_time,omitempty"`
+	MinNights       *int                 `json:"min_nights,omitempty"`
+	MaxNights       *int                 `json:"max_nights,omitempty"`
+	NightPrice      *float64             `json:"night_price,omitempty"`
+	CleaningFee     *float64             `json:"cleaning_fee,omitempty"`
+	SecurityDeposit *float64             `json:"security_deposit,omitempty"`
+	PricingRules    []domain.PricingRule `json:"pricing_rules,omitempty"`
 }
 
 func (h *PropertyHandler) Update(w http.ResponseWriter, r *http.Request) {
