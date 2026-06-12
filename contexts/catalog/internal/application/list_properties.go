@@ -52,12 +52,12 @@ func (uc *ListPropertiesUseCase) Execute(ctx context.Context, filters ports.List
 
 	dtos := make([]PropertyDTO, 0, len(properties))
 	for _, r := range properties {
-		dtos = append(dtos, toPropertyDTO(r.Property))
+		dtos = append(dtos, toPropertyDTO(r.Property, r.DistanceM))
 	}
 	return ListResponse{Properties: dtos, Total: total}, nil
 }
 
-func toPropertyDTO(p *domain.Property) PropertyDTO {
+func toPropertyDTO(p *domain.Property, distanceM *float64) PropertyDTO {
 	return PropertyDTO{
 		ID:          p.ID(),
 		OwnerID:     p.OwnerID(),
@@ -75,5 +75,6 @@ func toPropertyDTO(p *domain.Property) PropertyDTO {
 		State:         string(p.State()),
 		OperationType: string(p.OperationType()),
 		PetPolicy:     string(p.PetPolicy()),
+		DistanceM:     distanceM, // 🗺️
 	}
 }
