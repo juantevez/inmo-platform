@@ -20,6 +20,9 @@ CREATE TABLE IF NOT EXISTS properties (
     cleaning_fee     NUMERIC(12, 2) NOT NULL DEFAULT 0,
     security_deposit NUMERIC(12, 2) NOT NULL DEFAULT 0,
     pricing_rules    JSONB,
+    location         GEOGRAPHY(POINT, 4326) GENERATED ALWAYS AS (
+                     ST_MakePoint(longitude, latitude)::geography
+                     ) STORED,
     created_at       TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at       TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -27,3 +30,5 @@ CREATE TABLE IF NOT EXISTS properties (
 CREATE INDEX IF NOT EXISTS idx_properties_state          ON properties(state);
 CREATE INDEX IF NOT EXISTS idx_properties_operation_type ON properties(operation_type);
 CREATE INDEX IF NOT EXISTS idx_properties_pet_policy     ON properties(pet_policy);
+
+CREATE INDEX IF NOT EXISTS idx_properties_location       ON properties USING GIST(location);

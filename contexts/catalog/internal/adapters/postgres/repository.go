@@ -124,39 +124,62 @@ func (r *PropertyRepository) FindByID(ctx context.Context, id string) (*domain.P
 	return property, nil
 }
 
-func (r *PropertyRepository) FindAll(ctx context.Context, f ports.ListFilters) ([]*domain.Property, int, error) {
-	where, args := buildListWhere(f)
+func (r *PropertyRepository) FindAll(ctx context.Context, f ports.ListFilters) ([]ports.PropertyResult, int, error) {
+	where, whereArgs := buildListWhere(f)
 
 	// Total antes de paginar
 	var total int
 	countQuery := "SELECT COUNT(*) FROM properties" + where
-	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx, countQuery, whereArgs...).Scan(&total); err != nil {
 		return nil, 0, apperr.NewInternal("error al contar propiedades en postgres", err)
 	}
 
-	// Página de resultados
 	limit := f.Limit
 	if limit <= 0 {
 		limit = 50
 	}
-	n := len(args) + 1
+
+	// 🗺️ Construimos queryArgs en orden estricto: whereArgs → distCol → orderBy → limit/offset
+	queryArgs := make([]interface{}, len(whereArgs))
+	copy(queryArgs, whereArgs)
+	n := len(queryArgs) + 1
+
+	var distCol, orderBy string
+	if f.RadiusKm > 0 {
+		distCol = fmt.Sprintf(
+			", ROUND(ST_Distance(location, ST_MakePoint($%d, $%d)::geography)::numeric, 0) AS dist_m",
+			n, n+1,
+		)
+		queryArgs = append(queryArgs, f.Longitude, f.Latitude)
+		n += 2
+
+		orderBy = fmt.Sprintf(
+			" ORDER BY location <-> ST_MakePoint($%d, $%d)::geography",
+			n, n+1,
+		)
+		queryArgs = append(queryArgs, f.Longitude, f.Latitude)
+		n += 2
+	} else {
+		orderBy = " ORDER BY created_at DESC"
+	}
+
 	dataQuery := fmt.Sprintf(
 		`SELECT id, owner_id, title, description, price, currency, latitude, longitude, address,
 		        state, operation_type, pet_policy,
 		        amenities, check_in_time, check_out_time, min_nights, max_nights,
-		        night_price, cleaning_fee, security_deposit, pricing_rules
-		 FROM properties%s ORDER BY created_at DESC LIMIT $%d OFFSET $%d`,
-		where, n, n+1,
+		        night_price, cleaning_fee, security_deposit, pricing_rules%s
+		 FROM properties%s%s LIMIT $%d OFFSET $%d`,
+		distCol, where, orderBy, n, n+1,
 	)
-	args = append(args, limit, f.Offset)
+	queryArgs = append(queryArgs, limit, f.Offset)
 
-	rows, err := r.db.QueryContext(ctx, dataQuery, args...)
+	rows, err := r.db.QueryContext(ctx, dataQuery, queryArgs...)
 	if err != nil {
 		return nil, 0, apperr.NewInternal("error al listar propiedades en postgres", err)
 	}
 	defer rows.Close()
 
-	var properties []*domain.Property
+	var results []ports.PropertyResult
 	for rows.Next() {
 		var (
 			propID, ownerID, title, description, currency, state, address, opType, petPolicy string
@@ -165,13 +188,20 @@ func (r *PropertyRepository) FindAll(ctx context.Context, f ports.ListFilters) (
 			checkInTime, checkOutTime                                                        string
 			minNights, maxNights                                                             int
 			nightPrice, cleaningFee, securityDeposit                                         sql.NullFloat64
+			distM                                                                            sql.NullFloat64
 		)
-		if err := rows.Scan(
+
+		scanArgs := []any{
 			&propID, &ownerID, &title, &description, &priceAmount, &currency, &lat, &lng, &address,
 			&state, &opType, &petPolicy,
 			&amenitiesRaw, &checkInTime, &checkOutTime, &minNights, &maxNights,
 			&nightPrice, &cleaningFee, &securityDeposit, &pricingRulesRaw,
-		); err != nil {
+		}
+		if f.RadiusKm > 0 {
+			scanArgs = append(scanArgs, &distM)
+		}
+
+		if err := rows.Scan(scanArgs...); err != nil {
 			return nil, 0, apperr.NewInternal("error al escanear propiedad en postgres", err)
 		}
 
@@ -201,13 +231,18 @@ func (r *PropertyRepository) FindAll(ctx context.Context, f ports.ListFilters) (
 		}
 		_ = property.PullEvents()
 
-		properties = append(properties, property)
+		result := ports.PropertyResult{Property: property}
+		if f.RadiusKm > 0 && distM.Valid {
+			d := distM.Float64
+			result.DistanceM = &d
+		}
+		results = append(results, result)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, 0, apperr.NewInternal("error al iterar propiedades en postgres", err)
 	}
-	return properties, total, nil
+	return results, total, nil
 }
 
 func buildListWhere(f ports.ListFilters) (string, []interface{}) {
@@ -246,6 +281,15 @@ func buildListWhere(f ports.ListFilters) (string, []interface{}) {
 		clauses = append(clauses, fmt.Sprintf("owner_id = $%d", n))
 		args = append(args, f.OwnerID)
 		n++
+	}
+
+	if f.RadiusKm > 0 {
+		clauses = append(clauses, fmt.Sprintf(
+			"ST_DWithin(location, ST_MakePoint($%d, $%d)::geography, $%d)",
+			n, n+1, n+2,
+		))
+		args = append(args, f.Longitude, f.Latitude, f.RadiusKm*1000) // metros
+		n += 3
 	}
 
 	if len(clauses) == 0 {

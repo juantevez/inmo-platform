@@ -1,3 +1,5 @@
+DROP TABLE IF EXISTS property_blocked_dates;
+
 CREATE TABLE IF NOT EXISTS property_blocked_dates (
     id             VARCHAR(64) PRIMARY KEY,
     property_id    VARCHAR(64) NOT NULL REFERENCES properties(id) ON DELETE CASCADE,

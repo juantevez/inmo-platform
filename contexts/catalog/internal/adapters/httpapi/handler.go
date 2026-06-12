@@ -145,6 +145,16 @@ func (h *PropertyHandler) List(w http.ResponseWriter, r *http.Request) {
 		filters.MaxPrice, _ = strconv.ParseFloat(v, 64)
 	}
 
+	if lat := q.Get("lat"); lat != "" {
+		filters.Latitude, _ = strconv.ParseFloat(lat, 64)
+	}
+	if lon := q.Get("lon"); lon != "" {
+		filters.Longitude, _ = strconv.ParseFloat(lon, 64)
+	}
+	if r := q.Get("radius_km"); r != "" {
+		filters.RadiusKm, _ = strconv.ParseFloat(r, 64)
+	}
+
 	response, err := h.listUC.Execute(r.Context(), filters)
 	if err != nil {
 		h.errorResponse(w, err)

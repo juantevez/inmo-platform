@@ -2,9 +2,10 @@ package inmemory
 
 import (
 	"context"
+	"sync"
+
 	"inmo.platform/contexts/catalog/internal/domain"
 	"inmo.platform/contexts/catalog/internal/ports"
-	"sync"
 )
 
 type PropertyRepository struct {
@@ -35,7 +36,7 @@ func (r *PropertyRepository) FindByID(ctx context.Context, id string) (*domain.P
 	return prop, nil
 }
 
-func (r *PropertyRepository) FindAll(ctx context.Context, f ports.ListFilters) ([]*domain.Property, int, error) {
+func (r *PropertyRepository) FindAll(ctx context.Context, f ports.ListFilters) ([]ports.PropertyResult, int, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -57,7 +58,7 @@ func (r *PropertyRepository) FindAll(ctx context.Context, f ports.ListFilters) (
 
 	if f.Offset > 0 {
 		if f.Offset >= len(filtered) {
-			return []*domain.Property{}, total, nil
+			return []ports.PropertyResult{}, total, nil
 		}
 		filtered = filtered[f.Offset:]
 	}
@@ -65,5 +66,9 @@ func (r *PropertyRepository) FindAll(ctx context.Context, f ports.ListFilters) (
 		filtered = filtered[:f.Limit]
 	}
 
-	return filtered, total, nil
+	results := make([]ports.PropertyResult, len(filtered))
+	for i, p := range filtered {
+		results[i] = ports.PropertyResult{Property: p, DistanceM: nil}
+	}
+	return results, total, nil
 }

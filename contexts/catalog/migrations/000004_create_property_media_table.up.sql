@@ -1,3 +1,6 @@
+DROP TABLE IF EXISTS property_media;
+
+
 CREATE TABLE IF NOT EXISTS property_media (
     id           VARCHAR(64) PRIMARY KEY,
     property_id  VARCHAR(64) NOT NULL REFERENCES properties(id) ON DELETE CASCADE,

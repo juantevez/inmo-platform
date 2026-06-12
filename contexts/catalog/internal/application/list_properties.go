@@ -17,6 +17,7 @@ type PropertyDTO struct {
 	State         string      `json:"state"`
 	OperationType string      `json:"operation_type"`
 	PetPolicy     string      `json:"pet_policy"`
+	DistanceM     *float64    `json:"distance_m,omitempty"`
 }
 
 type PriceDTO struct {
@@ -50,8 +51,8 @@ func (uc *ListPropertiesUseCase) Execute(ctx context.Context, filters ports.List
 	}
 
 	dtos := make([]PropertyDTO, 0, len(properties))
-	for _, p := range properties {
-		dtos = append(dtos, toPropertyDTO(p))
+	for _, r := range properties {
+		dtos = append(dtos, toPropertyDTO(r.Property))
 	}
 	return ListResponse{Properties: dtos, Total: total}, nil
 }

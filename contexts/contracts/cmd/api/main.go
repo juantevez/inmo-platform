@@ -65,16 +65,21 @@ func main() {
 	}
 
 	// 3. Repositorios
-	contractRepo := postgres.NewContractRepository(dbPool)
+	contractRepo    := postgres.NewContractRepository(dbPool)
 	reservationRepo := postgres.NewReservationRepository(dbPool)
-	snapshotRepo := postgres.NewSnapshotRepository(dbPool)
+	snapshotRepo    := postgres.NewSnapshotRepository(dbPool)
 
-	// 4. Goroutines de background con WaitGroup y tracking de estado para health checks
+	// 4. Goroutines de background
 	var wg sync.WaitGroup
 
-	outboxStatus := health.NewWorkerStatus("outbox_worker")
-	propertySubStatus := health.NewWorkerStatus("property_subscriber")
+	// ── Workers de infraestructura ────────────────────────────────────────────
 
+	outboxStatus      := health.NewWorkerStatus("outbox_worker")
+	propertySubStatus := health.NewWorkerStatus("property_subscriber")
+	notifSubStatus    := health.NewWorkerStatus("reservation_notification_subscriber")
+	reminderStatus    := health.NewWorkerStatus("reminder_scheduler")
+
+	// Outbox publisher
 	outboxWorker := postgres.NewOutboxWorker(dbPool, js)
 	wg.Add(1)
 	go func() {
@@ -83,6 +88,7 @@ func main() {
 		outboxWorker.Start(ctx, 5*time.Second)
 	}()
 
+	// Sincronizador de snapshots de propiedades desde Catálogo
 	propertySub := contractsNats.NewPropertySubscriber(dbPool, js)
 	wg.Add(1)
 	go func() {
@@ -93,22 +99,44 @@ func main() {
 		}
 	}()
 
+	// ── NUEVO: Notificaciones al inquilino vía chat ───────────────────────────
+
+	// Subscriber que convierte eventos NATS de reserva en mensajes de sistema en el chat
+	notifSub := contractsNats.NewReservationNotificationSubscriber(js)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer notifSubStatus.MarkStopped()
+		if err := notifSub.StartConsume(ctx); err != nil {
+			log.Printf("[CONTRACTS ERROR] Subscriber de notificaciones: %v\n", err)
+		}
+	}()
+
+	// Scheduler de recordatorios 24hs antes del check-in
+	reminderScheduler := application.NewReminderScheduler(reservationRepo)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer reminderStatus.MarkStopped()
+		reminderScheduler.Start(ctx)
+	}()
+
 	// 5. Casos de uso — contratos tradicionales
-	createUseCase := application.NewCreateContractUseCase(contractRepo)
+	createUseCase   := application.NewCreateContractUseCase(contractRepo)
 	activateUseCase := application.NewActivateContractUseCase(dbPool, contractRepo)
 
 	// Casos de uso — reservas temporarias
-	createResUC := application.NewCreateReservationUseCase(dbPool, reservationRepo, snapshotRepo)
+	createResUC  := application.NewCreateReservationUseCase(dbPool, reservationRepo, snapshotRepo)
 	confirmResUC := application.NewConfirmReservationUseCase(dbPool, reservationRepo, snapshotRepo)
-	cancelResUC := application.NewCancelReservationUseCase(dbPool, reservationRepo)
-	getResUC := application.NewGetReservationUseCase(reservationRepo, snapshotRepo)
+	cancelResUC  := application.NewCancelReservationUseCase(dbPool, reservationRepo)
+	getResUC     := application.NewGetReservationUseCase(reservationRepo, snapshotRepo)
 	listOwnerResUC := application.NewGetOwnerReservationsUseCase(reservationRepo, snapshotRepo)
 
 	// 6. Handlers HTTP
-	contractHandler := httpapi.NewContractHandler(createUseCase, activateUseCase)
+	contractHandler    := httpapi.NewContractHandler(createUseCase, activateUseCase)
 	reservationHandler := httpapi.NewReservationHandler(createResUC, confirmResUC, cancelResUC, getResUC, listOwnerResUC)
-	checker := health.NewChecker(dbPool, nc, outboxStatus, propertySubStatus)
-	router := httpapi.NewRouter(contractHandler, reservationHandler, checker)
+	checker := health.NewChecker(dbPool, nc, outboxStatus, propertySubStatus, notifSubStatus, reminderStatus)
+	router  := httpapi.NewRouter(contractHandler, reservationHandler, checker)
 
 	server := &http.Server{
 		Addr:         ":8085",
@@ -136,11 +164,11 @@ func main() {
 		log.Printf("[CONTRACTS] Señal recibida (%s), iniciando apagado graceful...", sig)
 	}
 
-	// 8. Apagado graceful: primero el HTTP, luego las goroutines de background
+	// 8. Apagado graceful
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("[CONTRACTS] Error durante el apagado del servidor HTTP: %v", err)
+		log.Printf("[CONTRACTS] Error durante el apagado HTTP: %v", err)
 	}
 
 	cancel()
