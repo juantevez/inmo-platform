@@ -2,12 +2,16 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # 🗺️ PostGIS 3.4 sobre Postgres 16 — habilita geografía/geometría para mapas
+    image: postgis/postgis:16-3.4-alpine
     container_name: inmo-postgres
     environment:
       POSTGRES_USER: inmo_user
       POSTGRES_PASSWORD: inmo_password
       POSTGRES_DB: inmo_catalog_db # Base por defecto
+      # Habilita la extensión PostGIS automáticamente en todas las bases creadas
+      POSTGIS_ENABLE_OUTDB_RASTERS: 1
+      POSTGIS_GDAL_ENABLED_DRIVERS: ENABLE_ALL
     ports:
       - "5432:5432"
     volumes:
@@ -17,12 +21,11 @@ services:
     networks:
       - inmo-network
     healthcheck:
-      # 🔍 Validamos las 3 bases de datos en el healthcheck para ir sobre seguro
-      test: ["CMD-SHELL", "psql -U inmo_user -d inmo_catalog_db -c 'SELECT 1;' && psql -U inmo_user -d auth_db -c 'SELECT 1;' && psql -U inmo_user -d inmo_maintenance_db -c 'SELECT 1;'"]
-      interval: 3s
-      timeout: 3s
-      retries: 15
-      start_period: 25s
+      test: ["CMD-SHELL", "pg_isready -U inmo_user -d inmo_catalog_db && psql -U inmo_user -d inmo_catalog_db -c 'SELECT PostGIS_Version();' -q --no-align -t"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
 
   # --- MESSAGE BROKER: NATS con JetStream ---
   nats:
@@ -132,7 +135,7 @@ services:
     networks:
       - inmo-network
 
-  # --- MIGRATIONS: Corredor Automático para Mantenimiento (🛠️ CORREGIDO) ---
+  # --- MIGRATIONS: Corredor Automático para Mantenimiento ---
   maintenance-db-migration:
     image: migrate/migrate
     container_name: inmo-maintenance-migration
@@ -340,4 +343,4 @@ volumes:
 networks:
   inmo-network:
     driver: bridge
-
+    
