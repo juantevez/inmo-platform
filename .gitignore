@@ -12,6 +12,7 @@
 bin/
 pkg/
 vendor/
+.claude/ 
 
 # Dependencies
 go.sum

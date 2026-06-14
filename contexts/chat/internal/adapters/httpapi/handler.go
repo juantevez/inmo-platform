@@ -43,8 +43,11 @@ func (h *ChatHandler) HandleStartConversation(w http.ResponseWriter, r *http.Req
 	}
 
 	var req struct {
-		PropertyID   string `json:"property_id"`
-		AdvertiserID string `json:"advertiser_id"`
+		PropertyID     string `json:"property_id"`
+		PropertyTitle  string `json:"property_title"`
+		AdvertiserID   string `json:"advertiser_id"`
+		AdvertiserName string `json:"advertiser_name"`
+		SeekerName     string `json:"seeker_name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.errResp(w, apperr.NewBadRequest("JSON inválido", err))
@@ -52,9 +55,12 @@ func (h *ChatHandler) HandleStartConversation(w http.ResponseWriter, r *http.Req
 	}
 
 	dto, err := h.startConvUC.Execute(r.Context(), application.StartConversationCommand{
-		PropertyID:   req.PropertyID,
-		SeekerID:     userID,
-		AdvertiserID: req.AdvertiserID,
+		PropertyID:     req.PropertyID,
+		PropertyTitle:  req.PropertyTitle,
+		SeekerID:       userID,
+		SeekerName:     req.SeekerName,
+		AdvertiserID:   req.AdvertiserID,
+		AdvertiserName: req.AdvertiserName,
 	})
 	if err != nil {
 		h.errResp(w, err)

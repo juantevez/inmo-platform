@@ -24,14 +24,14 @@ func (uc *ListConversationsUseCase) Execute(ctx context.Context, userID string) 
 		return nil, apperr.NewBadRequest("user_id es requerido", nil)
 	}
 
-	convs, err := uc.convRepo.FindByParticipant(ctx, userID)
+	summaries, err := uc.convRepo.FindByParticipant(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("error al listar conversaciones: %w", err)
 	}
 
-	dtos := make([]*ConversationDTO, 0, len(convs))
-	for _, c := range convs {
-		dtos = append(dtos, toConversationDTO(c))
+	dtos := make([]*ConversationDTO, 0, len(summaries))
+	for _, s := range summaries {
+		dtos = append(dtos, toConversationDTO(s.Conversation, userID, s.LastMessage))
 	}
 	return dtos, nil
 }

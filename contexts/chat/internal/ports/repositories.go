@@ -6,12 +6,19 @@ import (
 	"inmo.platform/contexts/chat/internal/domain"
 )
 
+// ConversationSummary es un read-model que enriquece Conversation con el último mensaje
+// para poder renderizar la lista de chats sin N+1 queries.
+type ConversationSummary struct {
+	Conversation *domain.Conversation
+	LastMessage  string
+}
+
 // ConversationRepository define el contrato de persistencia del agregado Conversation.
 type ConversationRepository interface {
 	Save(ctx context.Context, c *domain.Conversation) error
 	FindByID(ctx context.Context, id string) (*domain.Conversation, error)
-	// FindByParticipant devuelve todas las conversaciones donde el userID es seeker o advertiser.
-	FindByParticipant(ctx context.Context, userID string) ([]*domain.Conversation, error)
+	// FindByParticipant devuelve conversaciones enriquecidas con el último mensaje.
+	FindByParticipant(ctx context.Context, userID string) ([]*ConversationSummary, error)
 	// FindByPropertyAndParticipants busca si ya existe un hilo para esa propiedad entre esos dos usuarios.
 	FindByPropertyAndParticipants(ctx context.Context, propertyID, seekerID, advertiserID string) (*domain.Conversation, error)
 }

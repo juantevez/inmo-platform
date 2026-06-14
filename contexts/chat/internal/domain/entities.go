@@ -34,16 +34,19 @@ const (
 // sobre una propiedad específica.
 type Conversation struct {
 	ddd.AggregateRoot
-	id           string
-	propertyID   string
-	seekerID     string // el Buscador que inició la consulta
-	advertiserID string // el Propietario o Agente
-	leadID       string // referencia al Lead en CRM (puede estar vacío inicialmente)
-	createdAt    time.Time
-	updatedAt    time.Time
+	id             string
+	propertyID     string
+	propertyTitle  string // denormalizado para mostrar en la lista sin llamadas cross-service
+	seekerID       string // el Buscador que inició la consulta
+	seekerName     string // denormalizado
+	advertiserID   string // el Propietario o Agente
+	advertiserName string // denormalizado
+	leadID         string // referencia al Lead en CRM (puede estar vacío inicialmente)
+	createdAt      time.Time
+	updatedAt      time.Time
 }
 
-func NewConversation(propertyID, seekerID, advertiserID string) (*Conversation, error) {
+func NewConversation(propertyID, propertyTitle, seekerID, seekerName, advertiserID, advertiserName string) (*Conversation, error) {
 	if propertyID == "" || seekerID == "" || advertiserID == "" {
 		return nil, apperr.NewBadRequest("property_id, seeker_id y advertiser_id son obligatorios", nil)
 	}
@@ -53,12 +56,15 @@ func NewConversation(propertyID, seekerID, advertiserID string) (*Conversation, 
 
 	now := time.Now().UTC()
 	c := &Conversation{
-		id:           nextID(),
-		propertyID:   propertyID,
-		seekerID:     seekerID,
-		advertiserID: advertiserID,
-		createdAt:    now,
-		updatedAt:    now,
+		id:             nextID(),
+		propertyID:     propertyID,
+		propertyTitle:  propertyTitle,
+		seekerID:       seekerID,
+		seekerName:     seekerName,
+		advertiserID:   advertiserID,
+		advertiserName: advertiserName,
+		createdAt:      now,
+		updatedAt:      now,
 	}
 	c.RecordEvent(NewConversationStarted(c))
 	return c, nil
@@ -66,17 +72,20 @@ func NewConversation(propertyID, seekerID, advertiserID string) (*Conversation, 
 
 // ReconstructConversation reconstruye desde persistencia sin disparar eventos.
 func ReconstructConversation(
-	id, propertyID, seekerID, advertiserID, leadID string,
+	id, propertyID, propertyTitle, seekerID, seekerName, advertiserID, advertiserName, leadID string,
 	createdAt, updatedAt time.Time,
 ) *Conversation {
 	return &Conversation{
-		id:           id,
-		propertyID:   propertyID,
-		seekerID:     seekerID,
-		advertiserID: advertiserID,
-		leadID:       leadID,
-		createdAt:    createdAt,
-		updatedAt:    updatedAt,
+		id:             id,
+		propertyID:     propertyID,
+		propertyTitle:  propertyTitle,
+		seekerID:       seekerID,
+		seekerName:     seekerName,
+		advertiserID:   advertiserID,
+		advertiserName: advertiserName,
+		leadID:         leadID,
+		createdAt:      createdAt,
+		updatedAt:      updatedAt,
 	}
 }
 
@@ -93,13 +102,16 @@ func (c *Conversation) IsParticipant(userID string) bool {
 
 func (c *Conversation) Touch() { c.updatedAt = time.Now().UTC() }
 
-func (c *Conversation) ID() string           { return c.id }
-func (c *Conversation) PropertyID() string   { return c.propertyID }
-func (c *Conversation) SeekerID() string     { return c.seekerID }
-func (c *Conversation) AdvertiserID() string { return c.advertiserID }
-func (c *Conversation) LeadID() string       { return c.leadID }
-func (c *Conversation) CreatedAt() time.Time { return c.createdAt }
-func (c *Conversation) UpdatedAt() time.Time { return c.updatedAt }
+func (c *Conversation) ID() string              { return c.id }
+func (c *Conversation) PropertyID() string      { return c.propertyID }
+func (c *Conversation) PropertyTitle() string   { return c.propertyTitle }
+func (c *Conversation) SeekerID() string        { return c.seekerID }
+func (c *Conversation) SeekerName() string      { return c.seekerName }
+func (c *Conversation) AdvertiserID() string    { return c.advertiserID }
+func (c *Conversation) AdvertiserName() string  { return c.advertiserName }
+func (c *Conversation) LeadID() string          { return c.leadID }
+func (c *Conversation) CreatedAt() time.Time    { return c.createdAt }
+func (c *Conversation) UpdatedAt() time.Time    { return c.updatedAt }
 
 // ── Message ───────────────────────────────────────────────────────────────
 
