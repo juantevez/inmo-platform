@@ -54,15 +54,19 @@ func NewCRMEventSubscriber(
 
 func (s *CRMEventSubscriber) StartConsume(ctx context.Context) error {
 	cons, err := s.js.CreateOrUpdateConsumer(ctx, "crm", jetstream.ConsumerConfig{
-		Durable:       "chat-crm-visit-sync",
-		FilterSubject: "crm.lead.visit_*",
+		Durable: "chat-crm-visit-sync",
+		// NATS no soporta wildcards parciales dentro de un token ("visit_*" no
+		// es válido): los wildcards solo matchean tokens completos ("*") o
+		// finales ("crm.lead.>"). Filtramos por prefijo y dejamos que el
+		// switch de abajo descarte los subjects que no maneja explícitamente.
+		FilterSubject: "crm.lead.>",
 		AckPolicy:     jetstream.AckExplicitPolicy,
 	})
 	if err != nil {
 		return fmt.Errorf("error al crear consumidor CRM en chat: %w", err)
 	}
 
-	log.Println("[CHAT NATS] 📡 Escuchando eventos de visitas en 'crm.lead.visit_*'...")
+	log.Println("[CHAT NATS] 📡 Escuchando eventos de visitas en 'crm.lead.>'...")
 
 	iter, err := cons.Messages()
 	if err != nil {

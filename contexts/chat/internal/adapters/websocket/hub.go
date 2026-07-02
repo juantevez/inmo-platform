@@ -14,13 +14,14 @@ type client struct {
 	conversationID string
 	conn           *websocket.Conn
 	send           chan []byte
+	closeOnce      sync.Once
 }
 
 // Hub mantiene el mapa de clientes activos y gestiona broadcast y desconexiones.
 type Hub struct {
-	mu      sync.RWMutex
+	mu sync.RWMutex
 	// rooms: conversationID → map[userID]*client
-	rooms   map[string]map[string]*client
+	rooms map[string]map[string]*client
 }
 
 func NewHub() *Hub {
@@ -68,17 +69,27 @@ func (h *Hub) register(c *client) {
 
 func (h *Hub) unregister(c *client) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	if room, ok := h.rooms[c.conversationID]; ok {
-		if _, exists := room[c.userID]; exists {
+		// Comparar por identidad, no solo por userID: si el mismo usuario abrió
+		// una conexión nueva antes de que esta se cerrara, room[userID] ya
+		// apunta a esa conexión más nueva y no debe ser desalojada.
+		if current, exists := room[c.userID]; exists && current == c {
 			delete(room, c.userID)
-			close(c.send)
-			log.Printf("[WS HUB] Usuario %s desconectado de conversación %s\n", c.userID, c.conversationID)
-		}
-		if len(room) == 0 {
-			delete(h.rooms, c.conversationID)
+			if len(room) == 0 {
+				delete(h.rooms, c.conversationID)
+			}
 		}
 	}
+	h.mu.Unlock()
+
+	// Cerrar el canal es responsabilidad del ciclo de vida de ESTA conexión
+	// (para que su goroutine de escritura termine), sin importar si todavía
+	// era la ocupante vigente del slot compartido del usuario. sync.Once
+	// evita un doble close si unregister se llama más de una vez.
+	c.closeOnce.Do(func() {
+		close(c.send)
+		log.Printf("[WS HUB] Usuario %s desconectado de conversación %s\n", c.userID, c.conversationID)
+	})
 }
 
 // ServeWS es el http.HandlerFunc que hace el upgrade de la conexión.
