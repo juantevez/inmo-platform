@@ -1,9 +1,9 @@
 module inmo.platform/contexts/auth-identity
 
-go 1.25.0
+go 1.19
 
 require (
-	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/golang-jwt/jwt/v5 v5.0.0
 	github.com/lib/pq v1.12.3
 	github.com/nats-io/nats.go v1.52.0
 	github.com/redis/go-redis/v9 v9.20.0

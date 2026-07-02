@@ -377,3 +377,4 @@ func TestMiddlewareChain(t *testing.T) {
 		})
 	}
 }
+

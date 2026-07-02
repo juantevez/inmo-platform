@@ -1,50 +1,103 @@
 ```
-# Dependencies
-node_modules/
-venv/
-.venv/
-__pycache__/
-.mypy_cache/
-.pytest_cache/
-target/
-.gradle/
-
-# Build artifacts
-dist/
-build/
-*.pyc
-*.class
+# Go build artifacts
 *.o
-*.exe
-*.dll
-*.so
 *.a
-*.obj
+*.so
+*.dylib
+*.dll
+*.exe
 *.out
+
+# Go cache and tools
+go.work.sum
+*.mod
+*.sum
+
+# Dependencies
+vendor/
+
+# Build directories
+build/
+dist/
+target/
 
 # Environment
 .env
 .env.local
-*.env.*
+.env.*
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*~
+.DS_Store
+Thumbs.db
 
 # Editors
 .vscode/
 .idea/
 *.swp
 *.swo
-*.tmp
-
-# System
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
 
 # Coverage
 coverage/
 htmlcov/
 .coverage
+
+# Python (if co-existing)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+*.so
+.Python
+include/
+share/
+bin/
+.pytest_cache/
+.mypy_cache/
+
+# Node (if co-existing)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Java (if co-existing)
+*.class
+*.jar
+*.war
+*.ear
+.gradle/
+build/
+!gradle/
+gradle-app.setting
+
+# C/C++ (if co-existing)
+*.i
+*.ii
+*.s
+*.su
+*.lo
+
+# Rust (if co-existing)
+Cargo.lock
+target/
+
+# Julia (if co-existing)
+julia-*/
+
+# Zig (if co-existing)
+zig-cache/
+zig-out/
 
 # Compressed files
 *.zip
