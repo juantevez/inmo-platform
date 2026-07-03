@@ -32,3 +32,48 @@ INSERT INTO properties (id, owner_id, title, description, price, currency, latit
 ('PROP-018', 'user-propietario-002', 'Casa a Actualizar con Gran Lote', 'Estructura sólida a refaccionar en Ramos Mejía. Lote de 10x40 metros, fondo libre con árboles frutales, 2 dormitorios y garage. 90m2 cubiertos.', 85000.00, 'USD', -34.649000, -58.569000, 'Pringles 1800', 'AVAILABLE', 'SALE'),
 ('PROP-019', 'user-propietario-002', 'Chalet Clásico de Tejas Coloniales', 'Living comedor en desnivel en Adrogué. Altillo/playroom muy espacioso, 3 dormitorios, garage cubierto para dos autos y fondo con parrilla. 200m2.', 210000.00, 'USD', -34.801000, -58.395000, 'Amenedo 1100', 'AVAILABLE', 'SALE'),
 ('PROP-020', 'user-propietario-002', 'Casa Sustentable de Estreno', 'Construcción modular en seco de alta eficiencia en Francisco Álvarez. Climatización solar instalada, 3 dormitorios, 2 baños y diseño bioclimático. 165m2.', 245000.00, 'USD', -34.629000, -58.868000, 'Gorriti 450', 'AVAILABLE', 'SALE');
+
+-- ALQUILERES TEMPORARIOS (turismo/vacacional) — alternando entre ambos propietarios.
+-- Estas filas necesitan las columnas propias de TempConfig (ver domain/temp_config.go):
+-- check_in_time/check_out_time, min_nights/max_nights, night_price, cleaning_fee,
+-- security_deposit, amenities y pricing_rules (JSONB con la forma de Amenity/PricingRule).
+INSERT INTO properties (
+    id, owner_id, title, description, price, currency, latitude, longitude, address, state, operation_type,
+    pet_policy, amenities, check_in_time, check_out_time, min_nights, max_nights, night_price, cleaning_fee, security_deposit, pricing_rules
+) VALUES
+('PROP-021', 'user-propietario-001', 'Depto Frente al Mar en Mar del Plata', 'Vista directa al mar en Playa Grande. 2 dormitorios, balcón terraza con parrilla y cochera cubierta. Ideal para descansar en familia a metros de la playa.', 25000.00, 'ARS', -38.005500, -57.542600, 'Alvear 2200', 'AVAILABLE', 'TEMP',
+ 'NOT_ALLOWED',
+ '[{"key":"wifi","label":"WiFi","category":"comfort","icon":"wifi"},{"key":"parrilla","label":"Parrilla","category":"comfort","icon":"grill"},{"key":"cochera","label":"Cochera","category":"infrastructure","icon":"car"}]'::jsonb,
+ '15:00', '10:00', 3, 21, 25000.00, 8000.00, 20000.00,
+ '[{"type":"weekly","min_nights":7,"discount_pct":10}]'::jsonb),
+
+('PROP-022', 'user-propietario-002', 'Cabaña de Montaña en Villa La Angostura', 'Cabaña de troncos con vista al lago Nahuel Huapi. Estufa a leña, deck de madera y entorno de bosque nativo. Perfecta para desconectar en la Patagonia.', 90.00, 'USD', -40.761400, -71.649700, 'Ruta 231 Km 3', 'AVAILABLE', 'TEMP',
+ 'NOT_ALLOWED',
+ '[{"key":"estufa_lena","label":"Estufa a leña","category":"comfort","icon":"fire"},{"key":"wifi","label":"WiFi","category":"comfort","icon":"wifi"},{"key":"vista_lago","label":"Vista al lago","category":"premium","icon":"mountain"}]'::jsonb,
+ '16:00', '10:00', 2, 30, 90.00, 40.00, 150.00,
+ '[{"type":"weekly","min_nights":7,"discount_pct":15},{"type":"monthly","min_nights":28,"discount_pct":30}]'::jsonb),
+
+('PROP-023', 'user-propietario-001', 'Casa de Fin de Semana en Tigre', 'Casa sobre el Río Luján con muelle propio y pileta. Living integrado, parrilla y galería cubierta. Ideal para escapadas de fin de semana en el Delta.', 35000.00, 'ARS', -34.426000, -58.579600, 'Río Luján s/n, Segunda Sección de Islas', 'AVAILABLE', 'TEMP',
+ 'NOT_ALLOWED',
+ '[{"key":"pileta","label":"Pileta","category":"premium","icon":"pool"},{"key":"muelle","label":"Muelle propio","category":"premium","icon":"anchor"},{"key":"parrilla","label":"Parrilla","category":"comfort","icon":"grill"}]'::jsonb,
+ '14:00', '11:00', 2, 14, 35000.00, 10000.00, 30000.00,
+ '[{"type":"weekly","min_nights":7,"discount_pct":12}]'::jsonb),
+
+('PROP-024', 'user-propietario-002', 'Depto Turístico en Palermo Soho', 'Monoambiente de diseño en el corazón de Palermo Soho, a pasos de bares y restaurantes. Aire acondicionado, cocina equipada y wifi de alta velocidad.', 28000.00, 'ARS', -34.588500, -58.430600, 'Thames 1800', 'AVAILABLE', 'TEMP',
+ 'NOT_ALLOWED',
+ '[{"key":"wifi","label":"WiFi","category":"comfort","icon":"wifi"},{"key":"aire_acondicionado","label":"Aire acondicionado","category":"comfort","icon":"snowflake"},{"key":"cocina_equipada","label":"Cocina equipada","category":"comfort","icon":"kitchen"}]'::jsonb,
+ '15:00', '10:00', 1, 45, 28000.00, 6000.00, 25000.00,
+ '[{"type":"weekly","min_nights":7,"discount_pct":8},{"type":"monthly","min_nights":30,"discount_pct":20}]'::jsonb),
+
+('PROP-025', 'user-propietario-001', 'Cabaña con Pileta en Villa Gesell', 'A 5 cuadras del mar. Cabaña de madera con pileta compartida, parrilla individual y cochera. Apta para grupos familiares numerosos.', 22000.00, 'ARS', -37.263200, -56.972600, 'Avenida 3 y Paseo 104', 'AVAILABLE', 'TEMP',
+ 'NOT_ALLOWED',
+ '[{"key":"pileta","label":"Pileta","category":"premium","icon":"pool"},{"key":"parrilla","label":"Parrilla","category":"comfort","icon":"grill"},{"key":"cochera","label":"Cochera","category":"infrastructure","icon":"car"},{"key":"wifi","label":"WiFi","category":"comfort","icon":"wifi"}]'::jsonb,
+ '15:00', '10:00', 3, 30, 22000.00, 7000.00, 18000.00,
+ '[{"type":"weekly","min_nights":7,"discount_pct":10},{"type":"monthly","min_nights":30,"discount_pct":22}]'::jsonb);
+
+-- APTO MASCOTA — 3 de los alquileres tradicionales existentes (RENT) pasan a aceptar mascotas.
+-- PROP-001 es un departamento sin patio -> SMALL_ONLY; PROP-005 y PROP-006 tienen
+-- terraza/jardín propio -> ALLOWED (cualquier tamaño).
+UPDATE properties SET pet_policy = 'SMALL_ONLY' WHERE id = 'PROP-001';
+UPDATE properties SET pet_policy = 'ALLOWED'    WHERE id = 'PROP-005';
+UPDATE properties SET pet_policy = 'ALLOWED'    WHERE id = 'PROP-006';
