@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     # 🗺️ PostGIS 3.4 sobre Postgres 16 — habilita geografía/geometría para mapas
@@ -59,22 +57,6 @@ services:
     networks:
       - inmo-network
 
-  # --- MIGRATIONS: Corredor Automático para Auth ---
-  auth-db-migration:
-    image: migrate/migrate
-    container_name: inmo-auth-migration
-    volumes:
-      - ../../contexts/auth-identity/migrations:/migrations
-    command:
-      - -path=/migrations
-      - -database=postgres://inmo_user:inmo_password@postgres:5432/auth_db?sslmode=disable
-      - up
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - inmo-network
-
   # --- MIGRATIONS: Corredor Automático para Catálogo ---
   catalog-db-migration:
     image: migrate/migrate
@@ -91,9 +73,59 @@ services:
     networks:
       - inmo-network
 
+  # --- MIGRATIONS: Corredor Automático para Auth ---
+  # Espera a que termine Catálogo para secuenciar la carga y asegurar que init-multiple-databases.sh haya creado auth_db
+  auth-db-migration:
+    image: migrate/migrate
+    container_name: inmo-auth-migration
+    volumes:
+      - ../../contexts/auth-identity/migrations:/migrations
+    command:
+      - -path=/migrations
+      - -database=postgres://inmo_user:inmo_password@postgres:5432/auth_db?sslmode=disable
+      - up
+    depends_on:
+      catalog-db-migration:
+        condition: service_completed_successfully
+    networks:
+      - inmo-network
+
+  # --- MIGRATIONS: Corredor Automático para Chat ---
+  # Se ejecuta secuencialmente después de Auth para evitar saturación de conexiones concurrentes en Postgres
+  chat-db-migration:
+    image: migrate/migrate
+    container_name: docker-chat-db-migration-1
+    volumes:
+      - ../../contexts/chat/migrations:/migrations
+    command:
+      - -path=/migrations
+      - -database=postgres://inmo_user:inmo_password@postgres:5432/inmo_catalog_db?sslmode=disable&x-migrations-table=chat_schema_migrations
+      - up
+    depends_on:
+      auth-db-migration:
+        condition: service_completed_successfully
+    networks:
+      - inmo-network
+
+  # --- MIGRATIONS: Corredor Automático para Mantenimiento ---
+  # Última migración de la secuencia, asegurando el aislamiento del entorno de BD
+  maintenance-db-migration:
+    image: migrate/migrate
+    container_name: inmo-maintenance-migration
+    volumes:
+      - ../../contexts/maintenance/migrations:/migrations
+    command:
+      - -path=/migrations
+      - -database=postgres://inmo_user:inmo_password@postgres:5432/inmo_maintenance_db?sslmode=disable
+      - up
+    depends_on:
+      chat-db-migration:
+        condition: service_completed_successfully
+    networks:
+      - inmo-network
+
   # --- MIGRATIONS: Corredor Automático para Contratos ---
   # x-migrations-table evita colisión con la tabla schema_migrations de Catálogo
-  # (ambos servicios comparten inmo_catalog_db).
   contracts-db-migration:
     image: migrate/migrate
     container_name: inmo-contracts-migration
@@ -104,7 +136,7 @@ services:
       - -database=postgres://inmo_user:inmo_password@postgres:5432/inmo_catalog_db?sslmode=disable&x-migrations-table=contracts_schema_migrations
       - up
     depends_on:
-      catalog-db-migration:
+      maintenance-db-migration:
         condition: service_completed_successfully
     networks:
       - inmo-network
@@ -135,22 +167,6 @@ services:
     networks:
       - inmo-network
 
-  # --- MIGRATIONS: Corredor Automático para Mantenimiento ---
-  maintenance-db-migration:
-    image: migrate/migrate
-    container_name: inmo-maintenance-migration
-    volumes:
-      - ../../contexts/maintenance/migrations:/migrations
-    command:
-      - -path=/migrations
-      - -database=postgres://inmo_user:inmo_password@postgres:5432/inmo_maintenance_db?sslmode=disable
-      - up
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - inmo-network
-
   # ── MICROSERVICIO DE MANTENIMIENTO ──────────────────────────────────────
   maintenance:
     build:
@@ -168,41 +184,6 @@ services:
         condition: service_healthy
       maintenance-db-migration:
         condition: service_completed_successfully
-    networks:
-      - inmo-network
-
-  # --- API Gateway: punto de acceso a los módulos ---
-  inmo-api-gateway:
-    container_name: inmo-api-gateway
-    build:
-      context: ../../
-      dockerfile: contexts/api-gateway/Dockerfile
-      network: host
-    ports:
-      - "8000:8000"
-    environment:
-      - GATEWAY_PORT=:8000
-      - CATALOG_SERVICE_URL=http://catalog:8081
-      - CRM_SERVICE_URL=http://crm:8084
-      - AUTH_SERVICE_URL=http://auth-identity:8080
-      - MAINTENANCE_SERVICE_URL=http://maintenance:8083
-      - FINANCES_SERVICE_URL=http://finances:8082
-      - CONTRACTS_SERVICE_URL=http://contracts:8085
-      - CHAT_SERVICE_URL=http://chat:8086 
-      - JWT_SECRET=tu_super_secreto_local
-    depends_on:
-      catalog:
-        condition: service_started
-      auth-identity:
-        condition: service_started
-      maintenance:
-        condition: service_started
-      finances:
-        condition: service_started
-      contracts:
-        condition: service_started
-      chat:                       
-        condition: service_started        
     networks:
       - inmo-network
 
@@ -279,21 +260,6 @@ services:
     networks:
       - inmo-network
 
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  chat-db-migration:
-    image: migrate/migrate
-    volumes:
-      - ../../contexts/chat/migrations:/migrations
-    command:
-      - -path=/migrations
-      - -database=postgres://inmo_user:inmo_password@postgres:5432/inmo_catalog_db?sslmode=disable&x-migrations-table=chat_schema_migrations
-      - up
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - inmo-network
-
   chat:
     build:
       context: ../../
@@ -316,7 +282,6 @@ services:
     networks:
       - inmo-network
  
-  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   finances:
     build:
       context: ../..
@@ -333,6 +298,41 @@ services:
         condition: service_healthy
     networks:
       - inmo-network 
+
+  # --- API Gateway: punto de acceso a los módulos ---
+  inmo-api-gateway:
+    container_name: inmo-api-gateway
+    build:
+      context: ../../
+      dockerfile: contexts/api-gateway/Dockerfile
+      network: host
+    ports:
+      - "8000:8000"
+    environment:
+      - GATEWAY_PORT=:8000
+      - CATALOG_SERVICE_URL=http://catalog:8081
+      - CRM_SERVICE_URL=http://crm:8084
+      - AUTH_SERVICE_URL=http://auth-identity:8080
+      - MAINTENANCE_SERVICE_URL=http://maintenance:8083
+      - FINANCES_SERVICE_URL=http://finances:8082
+      - CONTRACTS_SERVICE_URL=http://contracts:8085
+      - CHAT_SERVICE_URL=http://chat:8086 
+      - JWT_SECRET=tu_super_secreto_local
+    depends_on:
+      catalog:
+        condition: service_started
+      auth-identity:
+        condition: service_started
+      maintenance:
+        condition: service_started
+      finances:
+        condition: service_started
+      contracts:
+        condition: service_started
+      chat:                       
+        condition: service_started        
+    networks:
+      - inmo-network
 
 volumes:
   postgres_data:

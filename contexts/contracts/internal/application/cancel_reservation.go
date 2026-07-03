@@ -42,5 +42,8 @@ func (uc *CancelReservationUseCase) Execute(ctx context.Context, reservationID, 
 	if err := uc.resRepo.SaveWithTx(ctx, tx, reservation); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return apperr.NewInternal("error al confirmar transacción", err)
+	}
+	return nil
 }

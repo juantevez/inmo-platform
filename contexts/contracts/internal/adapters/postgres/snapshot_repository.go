@@ -56,9 +56,9 @@ func (r *SnapshotRepository) FindByID(ctx context.Context, propertyID string) (*
 	var (
 		propID, ownerID, opType, checkIn, checkOut string
 		nightPrice, cleaningFee, securityDeposit   float64
-		minNights, maxNights                        int
-		rulesJSON                                   []byte
-		updatedAt                                   time.Time
+		minNights, maxNights                       int
+		rulesJSON                                  []byte
+		updatedAt                                  time.Time
 	)
 	err := row.Scan(&propID, &ownerID, &opType, &nightPrice, &cleaningFee, &securityDeposit,
 		&minNights, &maxNights, &checkIn, &checkOut, &rulesJSON, &updatedAt)
@@ -71,7 +71,9 @@ func (r *SnapshotRepository) FindByID(ctx context.Context, propertyID string) (*
 
 	var rules []domain.PricingRule
 	if len(rulesJSON) > 0 {
-		_ = json.Unmarshal(rulesJSON, &rules)
+		if err := json.Unmarshal(rulesJSON, &rules); err != nil {
+			return nil, apperr.NewInternal("datos corrompidos en pricing_rules del snapshot", err)
+		}
 	}
 
 	return &domain.PropertySnapshot{
