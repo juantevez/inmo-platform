@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.25.0"
+  GOLANGCI_LINT_VERSION: "v1.64.5"
+
+jobs:
+  # Compila y testea cada módulo del workspace por separado (cada contexto y
+  # shared tienen su propio go.mod). No usamos vendor/ porque no está
+  # versionado (ver .gitignore) — cada job descarga sus dependencias.
+  test:
+    name: test (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - shared
+          - contexts/api-gateway
+          - contexts/auth-identity
+          - contexts/catalog
+          - contexts/chat
+          - contexts/contracts
+          - contexts/crm
+          - contexts/finances
+          - contexts/maintenance
+    defaults:
+      run:
+        working-directory: ${{ matrix.module }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -race -timeout 120s
+
+  # Lint independiente del test, para que un fallo de estilo no oculte (ni
+  # bloquee) el resultado de los tests, y viceversa.
+  lint:
+    name: lint (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - shared
+          - contexts/api-gateway
+          - contexts/auth-identity
+          - contexts/catalog
+          - contexts/chat
+          - contexts/contracts
+          - contexts/crm
+          - contexts/finances
+          - contexts/maintenance
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          working-directory: ${{ matrix.module }}
+
+  # Valida que cada servicio sea deployable: construye su imagen Docker (sin
+  # publicarla, no requiere credenciales de ningún registry). El contexto de
+  # build varía por servicio: auth-identity es un módulo Go standalone y se
+  # construye desde su propio directorio; el resto depende del workspace
+  # (go.work) o del paquete shared, así que necesitan el repo completo.
+  docker-build:
+    name: docker-build (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api-gateway
+            context: .
+            dockerfile: contexts/api-gateway/Dockerfile
+          - service: auth-identity
+            context: contexts/auth-identity
+            dockerfile: contexts/auth-identity/Dockerfile
+          - service: catalog
+            context: .
+            dockerfile: contexts/catalog/Dockerfile
+          - service: chat
+            context: .
+            dockerfile: contexts/chat/Dockerfile
+          - service: contracts
+            context: .
+            dockerfile: contexts/contracts/Dockerfile
+          - service: crm
+            context: .
+            dockerfile: contexts/crm/Dockerfile
+          - service: finances
+            context: .
+            dockerfile: contexts/finances/Dockerfile
+          - service: maintenance
+            context: .
+            dockerfile: contexts/maintenance/Dockerfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (sin publicar)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
