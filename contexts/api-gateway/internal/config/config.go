@@ -20,9 +20,9 @@ func Load() *Config {
 		CatalogURL:     getEnv("CATALOG_SERVICE_URL", "http://127.0.0.1:8081"),
 		CRMURL:         getEnv("CRM_SERVICE_URL", "http://127.0.0.1:8084"),
 		AuthURL:        getEnv("AUTH_SERVICE_URL", "http://127.0.0.1:8080"),
-		MaintenanceURL: getEnv("MAINTENANCE_SERVICE_URL", "http://127.0.0.1:8085"),
+		MaintenanceURL: getEnv("MAINTENANCE_SERVICE_URL", "http://127.0.0.1:8083"),
 		FinancesURL:    getEnv("FINANCES_SERVICE_URL", "http://127.0.0.1:8082"),
-		ContractsURL:   getEnv("CONTRACTS_SERVICE_URL", "http://127.0.0.1:8083"),
+		ContractsURL:   getEnv("CONTRACTS_SERVICE_URL", "http://127.0.0.1:8085"),
 		JWTSecret:      getEnv("JWT_SECRET", "dev_secret_local"),
 		ChatURL:        getEnv("CHAT_SERVICE_URL", "http://127.0.0.1:8086"),
 	}

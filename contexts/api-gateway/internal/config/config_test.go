@@ -36,10 +36,10 @@ func TestLoad_Defaults(t *testing.T) {
 		{"Port", cfg.Port, ":8000"},
 		{"CatalogURL", cfg.CatalogURL, "http://127.0.0.1:8081"},
 		{"CRMURL", cfg.CRMURL, "http://127.0.0.1:8084"},
-		{"AuthURL", cfg.AuthURL, "http://127.0.0.1:8086"},
-		{"MaintenanceURL", cfg.MaintenanceURL, "http://127.0.0.1:8085"},
+		{"AuthURL", cfg.AuthURL, "http://127.0.0.1:8080"},
+		{"MaintenanceURL", cfg.MaintenanceURL, "http://127.0.0.1:8083"},
 		{"FinancesURL", cfg.FinancesURL, "http://127.0.0.1:8082"},
-		{"ContractsURL", cfg.ContractsURL, "http://127.0.0.1:8083"},
+		{"ContractsURL", cfg.ContractsURL, "http://127.0.0.1:8085"},
 		{"JWTSecret", cfg.JWTSecret, "dev_secret_local"},
 	}
 
@@ -119,10 +119,10 @@ func TestLoad_PartialOverride(t *testing.T) {
 		"Port":           ":8000",
 		"CatalogURL":     "http://127.0.0.1:8081",
 		"CRMURL":         "http://127.0.0.1:8084",
-		"AuthURL":        "http://127.0.0.1:8086",
-		"MaintenanceURL": "http://127.0.0.1:8085",
+		"AuthURL":        "http://127.0.0.1:8080",
+		"MaintenanceURL": "http://127.0.0.1:8083",
 		"FinancesURL":    "http://127.0.0.1:8082",
-		"ContractsURL":   "http://127.0.0.1:8083",
+		"ContractsURL":   "http://127.0.0.1:8085",
 	}
 
 	for field, got := range defaults {

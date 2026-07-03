@@ -316,10 +316,24 @@ func TestRequireRole_ErrorBodyContainsRoleName(t *testing.T) {
 
 // ─── Cadena AuthValidator → RequireRole ───────────────────────────────────────
 
+// tokenWithRoles arma un JWT válido cuyo claim "roles" es la lista dada.
+// AuthValidator deriva el header X-User-Roles SIEMPRE del JWT, pisando
+// cualquier valor que el cliente haya mandado en el request — por eso los
+// roles hay que inyectarlos acá, no como header en el test.
+func tokenWithRoles(t *testing.T, userID string, roles ...string) string {
+	t.Helper()
+	claims := validClaims(userID)
+	claimRoles := make([]interface{}, len(roles))
+	for i, r := range roles {
+		claimRoles[i] = r
+	}
+	claims["roles"] = claimRoles
+	return makeToken(t, claims, testSecret, jwt.SigningMethodHS256)
+}
+
 // TestMiddlewareChain verifica la cadena completa tal como se usa en el router:
 // AuthValidator envuelve a RequireRole envuelve al handler final.
 func TestMiddlewareChain(t *testing.T) {
-	validToken := makeToken(t, validClaims("user-xyz"), testSecret, jwt.SigningMethodHS256)
 	invalidToken := "token.invalido.xxx"
 
 	authMW := middleware.AuthValidator(testSecret)
@@ -327,34 +341,29 @@ func TestMiddlewareChain(t *testing.T) {
 	chain := authMW(roleMW(http.HandlerFunc(nextHandler)))
 
 	tests := []struct {
-		name        string
-		authHeader  string
-		rolesHeader string
-		wantStatus  int
+		name       string
+		authHeader string
+		wantStatus int
 	}{
 		{
-			name:        "token válido + rol correcto → 200",
-			authHeader:  "Bearer " + validToken,
-			rolesHeader: "PROPIETARIO,INQUILINO",
-			wantStatus:  http.StatusOK,
+			name:       "token válido + rol correcto → 200",
+			authHeader: "Bearer " + tokenWithRoles(t, "user-xyz", "PROPIETARIO", "INQUILINO"),
+			wantStatus: http.StatusOK,
 		},
 		{
-			name:        "token válido + rol incorrecto → 403",
-			authHeader:  "Bearer " + validToken,
-			rolesHeader: "INQUILINO",
-			wantStatus:  http.StatusForbidden,
+			name:       "token válido + rol incorrecto → 403",
+			authHeader: "Bearer " + tokenWithRoles(t, "user-xyz", "INQUILINO"),
+			wantStatus: http.StatusForbidden,
 		},
 		{
-			name:        "token inválido — no llega al RequireRole → 401",
-			authHeader:  "Bearer " + invalidToken,
-			rolesHeader: "PROPIETARIO",
-			wantStatus:  http.StatusUnauthorized,
+			name:       "token inválido — no llega al RequireRole → 401",
+			authHeader: "Bearer " + invalidToken,
+			wantStatus: http.StatusUnauthorized,
 		},
 		{
-			name:        "sin token ni roles → 401 (AuthValidator corta primero)",
-			authHeader:  "",
-			rolesHeader: "",
-			wantStatus:  http.StatusUnauthorized,
+			name:       "sin token ni roles → 401 (AuthValidator corta primero)",
+			authHeader: "",
+			wantStatus: http.StatusUnauthorized,
 		},
 	}
 
@@ -363,9 +372,6 @@ func TestMiddlewareChain(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/properties", nil)
 			if tc.authHeader != "" {
 				req.Header.Set("Authorization", tc.authHeader)
-			}
-			if tc.rolesHeader != "" {
-				req.Header.Set("X-User-Roles", tc.rolesHeader)
 			}
 			rr := httptest.NewRecorder()
 
