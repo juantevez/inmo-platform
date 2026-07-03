@@ -141,6 +141,24 @@ services:
     networks:
       - inmo-network
 
+  # --- MIGRATIONS: Corredor Automático para CRM ---
+  # x-migrations-table evita colisión con la tabla schema_migrations de Catálogo
+  # (CRM comparte inmo_catalog_db, igual que Chat y Contratos)
+  crm-db-migration:
+    image: migrate/migrate
+    container_name: inmo-crm-migration
+    volumes:
+      - ../../contexts/crm/migrations:/migrations
+    command:
+      - -path=/migrations
+      - -database=postgres://inmo_user:inmo_password@postgres:5432/inmo_catalog_db?sslmode=disable&x-migrations-table=crm_schema_migrations
+      - up
+    depends_on:
+      contracts-db-migration:
+        condition: service_completed_successfully
+    networks:
+      - inmo-network
+
   # ── MICROSERVICIO DE CATÁLOGO ───────────────────────────────────────────
   catalog:
     build:
@@ -236,6 +254,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      nats:
+        condition: service_healthy
+      crm-db-migration:
+        condition: service_completed_successfully
     networks:
       - inmo-network
 

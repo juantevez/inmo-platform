@@ -3,15 +3,19 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
+	"inmo.platform/contexts/crm/internal/adapters/httpapi"
 	"inmo.platform/contexts/crm/internal/adapters/nats"
 	"inmo.platform/contexts/crm/internal/adapters/postgres"
 	"inmo.platform/contexts/crm/internal/application"
 	"inmo.platform/shared/pkg/eventbus"
+	"inmo.platform/shared/pkg/health"
 	"inmo.platform/shared/pkg/pg"
 )
 
@@ -20,7 +24,6 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 🚀 CAPTURA DINÁMICA DE ENTORNO
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		dbURL = "postgres://inmo_user:inmo_password@localhost:5432/inmo_catalog_db?sslmode=disable"
@@ -53,27 +56,91 @@ func main() {
 	defer natsConn.Close()
 	log.Println("CRM conectado exitosamente a NATS Core.")
 
+	// 2.1. Asegurar los streams necesarios. CRM publica al stream "crm" (antes
+	// dependía implícitamente de que contexts/chat lo creara primero) y
+	// re-asegura defensivamente "catalog", del que consume.
+	if err := natsConn.EnsureStream(ctx, "crm", []string{"crm.>"}); err != nil {
+		log.Fatalf("CRM no pudo asegurar el stream 'crm': %v", err)
+	}
+	if err := natsConn.EnsureStream(ctx, "catalog", []string{"catalog.property.*"}); err != nil {
+		log.Fatalf("CRM no pudo asegurar el stream 'catalog': %v", err)
+	}
+
 	// 3. Inicializar Adaptador de Salida Real (Postgres)
 	leadRepo := postgres.NewPostgresLeadRepository(dbPool)
 
-	// 4. Inicializar Caso de Uso de Aplicación
-	createLeadUC := application.NewCreateAutoLeadUseCase(leadRepo)
+	// 4. Goroutines de background
+	var wg sync.WaitGroup
 
-	// 4.1. Inicializar y Arrancar el Outbox Worker para CRM 🚀
+	outboxStatus := health.NewWorkerStatus("outbox_worker")
+	propertySubStatus := health.NewWorkerStatus("property_subscriber")
+
+	// 4.1. Outbox publisher
 	outboxWorker := postgres.NewOutboxWorker(dbPool, natsConn.JS)
-	go outboxWorker.Start(ctx, 15*time.Second) // Escaneo cada 15s para CRM
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer outboxStatus.MarkStopped()
+		outboxWorker.Start(ctx, 15*time.Second)
+	}()
 
-	// 5. Inicializar Adaptador de Entrada (NATS Subscriber) e iniciar consumo
-	subscriber := nats.NewPropertyEventSubscriber(natsConn.JS, createLeadUC)
-	if err := subscriber.StartConsume(ctx); err != nil {
-		log.Fatalf("Error crítico al iniciar el consumidor de NATS: %v", err)
+	// 4.2. Captación automática de leads reactiva a catalog.property.published
+	createAutoLeadUC := application.NewCreateAutoLeadUseCase(leadRepo)
+	subscriber := nats.NewPropertyEventSubscriber(natsConn.JS, createAutoLeadUC)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer propertySubStatus.MarkStopped()
+		if err := subscriber.StartConsume(ctx); err != nil {
+			log.Printf("[CRM ERROR] Subscriber de propiedades: %v\n", err)
+		}
+	}()
+
+	// 5. Casos de uso — seguimiento manual del agente
+	getLeadUC := application.NewGetLeadUseCase(leadRepo)
+	contactUC := application.NewContactLeadUseCase(leadRepo)
+	scheduleUC := application.NewScheduleVisitUseCase(leadRepo)
+	closeUC := application.NewCloseLeadUseCase(leadRepo)
+
+	// 6. Handler HTTP y router
+	leadHandler := httpapi.NewLeadHandler(getLeadUC, contactUC, scheduleUC, closeUC)
+	checker := health.NewChecker(dbPool, natsConn.NC, outboxStatus, propertySubStatus)
+	router := httpapi.NewRouter(leadHandler, checker)
+
+	server := &http.Server{
+		Addr:         ":8084",
+		Handler:      router,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
 	}
 
-	log.Println("Módulo CRM activo, persistiendo en BD y escuchando eventos asincrónicos...")
+	// 7. Manejo de señales OS
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
-	stopChan := make(chan os.Signal, 1)
-	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
-	<-stopChan
+	serverErr := make(chan error, 1)
+	go func() {
+		log.Println("Servidor de CRM corriendo en :8084")
+		serverErr <- server.ListenAndServe()
+	}()
 
-	log.Println("Apagando Módulo CRM de manera ordenada...")
+	select {
+	case err := <-serverErr:
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Error crítico en el servidor: %v", err)
+		}
+	case sig := <-quit:
+		log.Printf("[CRM] Señal recibida (%s), iniciando apagado graceful...", sig)
+	}
+
+	// 8. Apagado graceful
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("[CRM] Error durante el apagado HTTP: %v", err)
+	}
+
+	cancel()
+	wg.Wait()
+	log.Println("[CRM] Módulo apagado correctamente.")
 }
