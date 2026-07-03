@@ -46,7 +46,7 @@ func (uc *CloseSettlementUseCase) Execute(ctx context.Context, settlementId stri
 	if err != nil {
 		return fmt.Errorf("error al iniciar transaccion: %w", err)
 	}
-	defer tx.Rollback() // Si algo falla o no se confirma con Commit, se deshace todo
+	defer func() { _ = tx.Rollback() }() // Si algo falla o no se confirma con Commit, se deshace todo
 
 	// 2. Ejecutar la lógica de negocio: Cambiar el estado de la liquidación a CLOSED
 	// (Acá podrías tener una búsqueda previa si tu modelo de dominio lo requiere)

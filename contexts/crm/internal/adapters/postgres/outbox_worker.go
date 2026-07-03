@@ -46,7 +46,7 @@ func (w *OutboxWorker) processEvents(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Importante: Usamos una tabla específica crm_outbox_events para no colisionar
 	// si compartimos la base de datos inmo_catalog_db

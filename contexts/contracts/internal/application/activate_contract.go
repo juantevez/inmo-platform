@@ -27,7 +27,7 @@ func (uc *ActivateContractUseCase) Execute(ctx context.Context, contractID strin
 	if err != nil {
 		return apperr.NewInternal("no se pudo iniciar la transacción de activación", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// 2. Buscar el contrato actual
 	contract, err := uc.contractRepo.FindByID(ctx, contractID)

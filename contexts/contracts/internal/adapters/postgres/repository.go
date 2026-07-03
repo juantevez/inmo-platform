@@ -26,7 +26,7 @@ func (r *ContractRepository) Save(ctx context.Context, c *domain.Contract) error
 	if err != nil {
 		return apperr.NewInternal("no se pudo iniciar tx para guardar contrato", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	if err := r.SaveWithTx(ctx, tx, c); err != nil {
 		return err

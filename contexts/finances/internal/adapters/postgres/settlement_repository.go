@@ -57,7 +57,7 @@ func (r *PostgresSettlementRepository) Save(ctx context.Context, s *domain.Settl
 	if err != nil {
 		return fmt.Errorf("no se pudo iniciar la transacción de guardado: %w", err)
 	}
-	defer tx.Rollback() // Se ejecuta si hay un return antes del Commit
+	defer func() { _ = tx.Rollback() }() // Se ejecuta si hay un return antes del Commit
 
 	// 1. Insertar la cabecera (Settlement)
 	queryHeader := `
@@ -89,7 +89,7 @@ func (r *PostgresSettlementRepository) Update(ctx context.Context, s *domain.Set
 	if err != nil {
 		return fmt.Errorf("no se pudo iniciar la transacción de actualización: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// 1. Actualizar datos de la cabecera (Estado y fecha de cierre)
 	queryHeader := `

@@ -140,7 +140,7 @@ func TestReservationRepository_SaveWithTx_SinEventos_NoInsertaEnElOutbox(t *test
 	if err != nil {
 		t.Fatalf("db.Begin: %v", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	if err := repo.SaveWithTx(context.Background(), tx, r); err != nil {
 		t.Fatalf("SaveWithTx: %v", err)
@@ -161,7 +161,7 @@ func TestReservationRepository_SaveWithTx_ErrorAlInsertarEnElOutbox(t *testing.T
 	if err != nil {
 		t.Fatalf("db.Begin: %v", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	err = repo.SaveWithTx(context.Background(), tx, newReservationFixture(t))
 	assertInternalError(t, err)

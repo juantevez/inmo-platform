@@ -24,7 +24,7 @@ func (r *PostgresLeadRepository) Save(ctx context.Context, lead *domain.Lead, ev
 	if err != nil {
 		return fmt.Errorf("error al iniciar transaccion: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// 1. Insertar o Actualizar el Lead (Upsert)
 	leadQuery := `

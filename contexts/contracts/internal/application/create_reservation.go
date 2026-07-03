@@ -12,9 +12,9 @@ import (
 )
 
 type CreateReservationUseCase struct {
-	db          *sql.DB
-	resRepo     ports.ReservationRepository
-	snapRepo    ports.PropertySnapshotRepository
+	db       *sql.DB
+	resRepo  ports.ReservationRepository
+	snapRepo ports.PropertySnapshotRepository
 }
 
 func NewCreateReservationUseCase(db *sql.DB, resRepo ports.ReservationRepository, snapRepo ports.PropertySnapshotRepository) *CreateReservationUseCase {
@@ -93,7 +93,7 @@ func (uc *CreateReservationUseCase) Execute(ctx context.Context, cmd CreateReser
 	if err != nil {
 		return nil, apperr.NewInternal("error al iniciar transacción", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	if err := uc.resRepo.SaveWithTx(ctx, tx, reservation); err != nil {
 		return nil, err

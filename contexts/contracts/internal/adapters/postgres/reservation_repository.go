@@ -25,7 +25,7 @@ func (r *ReservationRepository) Save(ctx context.Context, res *domain.Reservatio
 	if err != nil {
 		return apperr.NewInternal("error al iniciar transacción", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if err := r.SaveWithTx(ctx, tx, res); err != nil {
 		return err
 	}

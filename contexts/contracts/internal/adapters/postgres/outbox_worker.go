@@ -56,7 +56,7 @@ func (w *OutboxWorker) processEvents(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("error al iniciar tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Consulta optimizada con FOR UPDATE SKIP LOCKED
 	query := `

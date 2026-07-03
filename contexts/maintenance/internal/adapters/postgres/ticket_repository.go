@@ -39,7 +39,7 @@ func (r *PostgresTicketRepository) Save(ctx context.Context, t *domain.Ticket) e
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// 1. Manejo de tipos Nulos/Opcionales para la consulta SQL
 	var providerID, quoteDetails, evidenceDesc, evidenceURL sql.NullString

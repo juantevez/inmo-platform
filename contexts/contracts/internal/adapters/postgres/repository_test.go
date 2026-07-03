@@ -98,7 +98,7 @@ func TestContractRepository_SaveWithTx_ErrorAlInsertarElContrato(t *testing.T) {
 	if err != nil {
 		t.Fatalf("db.Begin: %v", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	err = repo.SaveWithTx(context.Background(), tx, draftContractFixture(t))
 	assertInternalError(t, err)
@@ -116,7 +116,7 @@ func TestContractRepository_SaveWithTx_SinEventos_NoInsertaEnElOutbox(t *testing
 	if err != nil {
 		t.Fatalf("db.Begin: %v", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	if err := repo.SaveWithTx(context.Background(), tx, draftContractFixture(t)); err != nil {
 		t.Fatalf("SaveWithTx: %v", err)
@@ -139,7 +139,7 @@ func TestContractRepository_SaveWithTx_ConEventos_LosInsertaEnElOutbox(t *testin
 	if err != nil {
 		t.Fatalf("db.Begin: %v", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	if err := repo.SaveWithTx(context.Background(), tx, activatedContractFixture(t)); err != nil {
 		t.Fatalf("SaveWithTx: %v", err)
@@ -161,7 +161,7 @@ func TestContractRepository_SaveWithTx_ErrorAlInsertarEnElOutbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("db.Begin: %v", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	err = repo.SaveWithTx(context.Background(), tx, activatedContractFixture(t))
 	assertInternalError(t, err)

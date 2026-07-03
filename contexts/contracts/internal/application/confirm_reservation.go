@@ -38,7 +38,7 @@ func (uc *ConfirmReservationUseCase) Execute(ctx context.Context, reservationID,
 	if err != nil {
 		return nil, apperr.NewInternal("error al iniciar transacción", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	if err := uc.resRepo.SaveWithTx(ctx, tx, reservation); err != nil {
 		return nil, err
