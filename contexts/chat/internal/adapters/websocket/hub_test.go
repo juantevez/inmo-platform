@@ -218,7 +218,9 @@ func TestHub_ServeWS_ConexionRealSeRegistraYRecibeBroadcast(t *testing.T) {
 
 	h.Broadcast("conv-1", []byte("mensaje de prueba"))
 
-	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if err := ws.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("SetReadDeadline: %v", err)
+	}
 	var got string
 	if err := wsclient.Message.Receive(ws, &got); err != nil {
 		t.Fatalf("Receive: %v", err)

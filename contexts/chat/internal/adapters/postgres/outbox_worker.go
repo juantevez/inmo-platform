@@ -46,7 +46,7 @@ func (w *ChatOutboxWorker) processEvents(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, subject, payload

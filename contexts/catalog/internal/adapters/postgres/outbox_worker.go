@@ -49,7 +49,7 @@ func (w *OutboxWorker) processPendingEvents(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// 2. Buscamos los eventos pendientes aislándolos con SKIP LOCKED
 	query := `

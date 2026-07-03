@@ -93,7 +93,7 @@ func (uc *PublishPropertyUseCase) Execute(ctx context.Context, dto PublishProper
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Type Assertion para usar las capacidades de la base de datos real sin romper el desacoplamiento
 	type TxRepository interface {

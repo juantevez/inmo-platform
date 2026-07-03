@@ -24,7 +24,7 @@ func (r *PostgresUserRepository) Save(ctx context.Context, user *domain.User, pr
 	if err != nil {
 		return fmt.Errorf("error al iniciar transaccion de guardado: %w", err)
 	}
-	defer tx.Rollback() // Si algo falla antes del Commit, limpia todo automáticamente
+	defer func() { _ = tx.Rollback() }() // Si algo falla antes del Commit, limpia todo automáticamente
 
 	// 1. Insertar el usuario núcleo
 	userQuery := `INSERT INTO users (id, email, status, phone, phone_verified_at, created_at) 

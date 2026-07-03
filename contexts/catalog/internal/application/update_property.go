@@ -20,14 +20,14 @@ type UpdatePropertyDTO struct {
 	Address     *string  `json:"address,omitempty"`
 	PetPolicy   *string  `json:"pet_policy,omitempty"`
 	// Campos de alquiler temporario (opcionales, solo aplican si OperationType == "TEMP")
-	CheckInTime     *string                `json:"check_in_time,omitempty"`
-	CheckOutTime    *string                `json:"check_out_time,omitempty"`
-	MinNights       *int                   `json:"min_nights,omitempty"`
-	MaxNights       *int                   `json:"max_nights,omitempty"`
-	NightPrice      *float64               `json:"night_price,omitempty"`
-	CleaningFee     *float64               `json:"cleaning_fee,omitempty"`
-	SecurityDeposit *float64               `json:"security_deposit,omitempty"`
-	PricingRules    []domain.PricingRule   `json:"pricing_rules,omitempty"`
+	CheckInTime     *string              `json:"check_in_time,omitempty"`
+	CheckOutTime    *string              `json:"check_out_time,omitempty"`
+	MinNights       *int                 `json:"min_nights,omitempty"`
+	MaxNights       *int                 `json:"max_nights,omitempty"`
+	NightPrice      *float64             `json:"night_price,omitempty"`
+	CleaningFee     *float64             `json:"cleaning_fee,omitempty"`
+	SecurityDeposit *float64             `json:"security_deposit,omitempty"`
+	PricingRules    []domain.PricingRule `json:"pricing_rules,omitempty"`
 }
 
 type UpdatePropertyUseCase struct {
@@ -170,7 +170,7 @@ func (uc *UpdatePropertyUseCase) Execute(ctx context.Context, propertyID string,
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Type Assertion para usar las capacidades de la base de datos real
 	type TxRepository interface {

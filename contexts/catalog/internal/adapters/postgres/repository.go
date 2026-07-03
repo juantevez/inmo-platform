@@ -289,7 +289,6 @@ func buildListWhere(f ports.ListFilters) (string, []interface{}) {
 			n, n+1, n+2,
 		))
 		args = append(args, f.Longitude, f.Latitude, f.RadiusKm*1000) // metros
-		n += 3
 	}
 
 	if len(clauses) == 0 {

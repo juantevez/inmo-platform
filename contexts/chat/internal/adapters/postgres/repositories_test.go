@@ -395,7 +395,7 @@ func TestOutboxRepository_SaveTx_ErrorDeEjecucion_RetornaInternal(t *testing.T) 
 	if err != nil {
 		t.Fatalf("BeginTx: %v", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	err = repo.SaveTx(context.Background(), tx, "chat.message.sent", []byte(`{}`))
 	assertInternalError(t, err)
