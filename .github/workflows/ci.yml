@@ -15,7 +15,6 @@ concurrency:
 
 env:
   GO_VERSION: "1.25.0"
-  GOLANGCI_LINT_VERSION: "v1.64.5"
 
 jobs:
   # Compila y testea cada módulo del workspace por separado (cada contexto y
@@ -78,6 +77,9 @@ jobs:
           - contexts/crm
           - contexts/finances
           - contexts/maintenance
+    defaults:
+      run:
+        working-directory: ${{ matrix.module }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -89,11 +91,11 @@ jobs:
           cache: true
           cache-dependency-path: ${{ matrix.module }}/go.sum
 
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: ${{ env.GOLANGCI_LINT_VERSION }}
-          working-directory: ${{ matrix.module }}
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+      - name: Run golangci-lint
+        run: golangci-lint run
 
   # Valida que cada servicio sea deployable: construye su imagen Docker (sin
   # publicarla, no requiere credenciales de ningún registry). El contexto de
